@@ -13,7 +13,7 @@ import (
 	"recovery/recovery"
 )
 
-const maxDiscordUpload = 24 * 1024 * 1024 // stay under Discord 25MB webhook limit
+const maxDiscordUpload = 22 * 1024 * 1024 // stay under Discord 25MB webhook limit (multipart overhead)
 
 type archiveEntry struct {
 	zipPath  string
