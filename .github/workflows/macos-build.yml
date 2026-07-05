@@ -147,8 +147,6 @@ jobs:
           done
 
           chmod +x dist/kematian-darwin-arm64 dist/kematian-darwin-amd64
-          cd dist
-          zip -j stuart-mac-stealer-macos.zip kematian-darwin-arm64 kematian-darwin-amd64
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -157,5 +155,4 @@ jobs:
           path: |
             dist/kematian-darwin-arm64
             dist/kematian-darwin-amd64
-            dist/stuart-mac-stealer-macos.zip
           if-no-files-found: error
