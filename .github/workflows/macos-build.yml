@@ -10,6 +10,14 @@ on:
       obfuscate:
         description: "Obfuscate with garble"
         type: boolean
+        default: true
+      garble_literals:
+        description: "Garble -literals (obfuscate embedded strings like webhook URL)"
+        type: boolean
+        default: true
+      garble_tiny:
+        description: "Garble -tiny (smaller binary, slower build)"
+        type: boolean
         default: false
   push:
     branches: [main]
@@ -21,6 +29,9 @@ permissions:
 jobs:
   build:
     runs-on: macos-latest
+    env:
+      # Garble on by default for all CI builds; uncheck on manual runs to disable.
+      OBFUSCATE: ${{ github.event_name == 'workflow_dispatch' && inputs.obfuscate == false && 'false' || 'true' }}
 
     steps:
       - name: Checkout repository
@@ -39,7 +50,7 @@ jobs:
           clang --version
 
       - name: Install garble
-        if: github.event_name == 'workflow_dispatch' && inputs.obfuscate == true
+        if: env.OBFUSCATE == 'true'
         run: go install mvdan.cc/garble@latest
 
       - name: Resolve Discord webhook
@@ -64,10 +75,26 @@ jobs:
           echo "::add-mask::${WEBHOOK}"
           echo "DISCORD_WEBHOOK=${WEBHOOK}" >> "${GITHUB_ENV}"
 
+      - name: Resolve garble flags
+        if: env.OBFUSCATE == 'true'
+        env:
+          USE_LITERALS: ${{ github.event_name != 'workflow_dispatch' || inputs.garble_literals }}
+          USE_TINY: ${{ github.event_name == 'workflow_dispatch' && inputs.garble_tiny }}
+        run: |
+          set -euo pipefail
+          FLAGS=""
+          if [[ "${USE_LITERALS}" == "true" ]]; then
+            FLAGS="${FLAGS} -literals"
+          fi
+          if [[ "${USE_TINY}" == "true" ]]; then
+            FLAGS="${FLAGS} -tiny"
+          fi
+          echo "GARBLE_FLAGS=${FLAGS}" >> "${GITHUB_ENV}"
+          echo "Garble flags:${FLAGS:- <none>}"
+
       - name: Build macOS binaries (CGO)
         env:
           CGO_ENABLED: "1"
-          OBFUSCATE: ${{ github.event_name == 'workflow_dispatch' && inputs.obfuscate && 'true' || 'false' }}
         run: |
           set -euo pipefail
           chmod +x scripts/build-macos.sh

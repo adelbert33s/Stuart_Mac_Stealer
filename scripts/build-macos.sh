@@ -15,7 +15,17 @@ fi
 BUILD_CMD=(go build -ldflags="${LDFLAGS}")
 
 if [[ "${OBFUSCATE:-false}" == "true" ]]; then
-  BUILD_CMD=(garble build -ldflags="${LDFLAGS}")
+  if ! command -v garble >/dev/null 2>&1; then
+    echo "garble not found. Install with: go install mvdan.cc/garble@latest" >&2
+    exit 1
+  fi
+  GARBLE_ARGS=()
+  if [[ -n "${GARBLE_FLAGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    GARBLE_ARGS=(${GARBLE_FLAGS})
+  fi
+  echo "Obfuscation enabled (garble ${GARBLE_ARGS[*]:-<default>})"
+  BUILD_CMD=(garble "${GARBLE_ARGS[@]}" build -ldflags="${LDFLAGS}")
 fi
 
 pushd "${ROOT}" >/dev/null

