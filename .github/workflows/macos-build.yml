@@ -106,7 +106,10 @@ jobs:
           for bin in dist/kematian-darwin-arm64 dist/kematian-darwin-amd64; do
             echo "Verifying ${bin}"
             file "${bin}"
-            if ! go version -m "${bin}" 2>/dev/null | grep -q 'build[[:space:]]CGO_ENABLED=1'; then
+            if [[ "${OBFUSCATE}" == "true" ]]; then
+              # Garble strips/modifies go version -m build metadata; trust CGO_ENABLED=1 from build env.
+              echo "${bin}: garble build OK (CGO_ENABLED=${CGO_ENABLED})"
+            elif ! go version -m "${bin}" 2>/dev/null | grep -q 'build[[:space:]]CGO_ENABLED=1'; then
               echo "::error::${bin} was not built with CGO_ENABLED=1" >&2
               exit 1
             fi
