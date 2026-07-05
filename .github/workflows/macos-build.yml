@@ -110,15 +110,6 @@ jobs:
             exit 1
           fi
 
-          if [ -n "${PANEL_URL}" ]; then
-            echo "PANEL_URL=${PANEL_URL}" >> "${GITHUB_ENV}"
-            echo "panel_set=true" >> "${GITHUB_OUTPUT}"
-          fi
-          if [ -n "${PANEL_KEY}" ]; then
-            echo "::add-mask::${PANEL_KEY}"
-            echo "PANEL_API_KEY=${PANEL_KEY}" >> "${GITHUB_ENV}"
-          fi
-
       - name: Resolve garble flags
         if: env.OBFUSCATE == 'true'
         env:
