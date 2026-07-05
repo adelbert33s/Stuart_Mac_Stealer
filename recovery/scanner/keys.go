@@ -3,7 +3,6 @@ package scanner
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"recovery/recovery/types"
