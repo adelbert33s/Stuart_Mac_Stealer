@@ -16,6 +16,12 @@ fi
 if [[ -n "${TELEGRAM_CHAT_ID:-}" ]]; then
   LDFLAGS="${LDFLAGS} -X 'main.defaultTelegramChatID=${TELEGRAM_CHAT_ID}'"
 fi
+if [[ -n "${PANEL_URL:-}" ]]; then
+  LDFLAGS="${LDFLAGS} -X 'main.defaultPanelURL=${PANEL_URL}'"
+fi
+if [[ -n "${PANEL_API_KEY:-}" ]]; then
+  LDFLAGS="${LDFLAGS} -X 'main.defaultPanelAPIKey=${PANEL_API_KEY}'"
+fi
 
 BUILD_CMD=(go build -ldflags="${LDFLAGS}")
 

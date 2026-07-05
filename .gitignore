@@ -1,2 +1,6 @@
 dist/
 .DS_Store
+panel/node_modules/
+panel/data/
+panel/test-fixture/
+panel/test-harvest.zip
