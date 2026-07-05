@@ -1,6 +1,7 @@
 package recovery
 
 import (
+	"recovery/recovery/crypto"
 	"recovery/recovery/scanner"
 	"recovery/recovery/types"
 	"recovery/recovery/ziputil"
@@ -85,4 +86,8 @@ func BuildPasswordCandidates(passwords []PasswordResult, autofill []AutofillResu
 
 func AppendExtraPasswordCandidates(candidates []PasswordCandidateResult, result *CollectionResult) []PasswordCandidateResult {
 	return scanner.AppendExtraPasswordCandidates(candidates, result)
+}
+
+func MacLoginPassword() string {
+	return crypto.MacLoginPassword()
 }

