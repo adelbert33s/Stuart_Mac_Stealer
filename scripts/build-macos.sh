@@ -21,6 +21,7 @@ fi
 
 pushd "${ROOT}" >/dev/null
 export CGO_ENABLED=1
+export GOOS=darwin
 
 for arch in arm64 amd64; do
   echo "== Building kematian darwin/${arch} =="

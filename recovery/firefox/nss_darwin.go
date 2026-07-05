@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build darwin
 
 package firefox
 
@@ -55,7 +55,6 @@ import "C"
 import (
 	"encoding/base64"
 	"os"
-	"runtime"
 	"strings"
 	"unsafe"
 
@@ -63,16 +62,6 @@ import (
 )
 
 var nssLibPaths = []string{
-	// Linux paths
-	"/usr/lib/x86_64-linux-gnu/libnss3.so",
-	"/usr/lib64/libnss3.so",
-	"/usr/lib/libnss3.so",
-	"/usr/lib/firefox/libnss3.so",
-	"/usr/lib64/firefox/libnss3.so",
-	"/opt/firefox/libnss3.so",
-	"/opt/librewolf/libnss3.so",
-	"/snap/firefox/current/usr/lib/firefox/libnss3.so",
-	// macOS paths
 	"/Applications/Firefox.app/Contents/MacOS/libnss3.dylib",
 	"/Applications/LibreWolf.app/Contents/MacOS/libnss3.dylib",
 	"/Applications/Waterfox.app/Contents/MacOS/libnss3.dylib",
@@ -81,22 +70,12 @@ var nssLibPaths = []string{
 }
 
 func findNSSLib() string {
-	suffix := ".so"
-	if runtime.GOOS == "darwin" {
-		suffix = ".dylib"
-	}
 	for _, p := range nssLibPaths {
-		if strings.HasSuffix(p, suffix) {
-			if _, err := os.Stat(p); err == nil {
-				return p
-			}
+		if _, err := os.Stat(p); err == nil {
+			return p
 		}
 	}
-	name := "libnss3.so"
-	if runtime.GOOS == "darwin" {
-		name = "libnss3.dylib"
-	}
-	return name
+	return "libnss3.dylib"
 }
 
 func nssDecryptLogins(profilePath, browserName string, logins []firefoxLogin) []types.PasswordResult {
@@ -123,8 +102,8 @@ func nssDecryptLogins(profilePath, browserName string, logins []firefoxLogin) []
 
 	var results []types.PasswordResult
 	for _, login := range logins {
-		username := nssDecryptUnix(handle, login.EncryptedUsername)
-		password := nssDecryptUnix(handle, login.EncryptedPassword)
+		username := nssDecrypt(handle, login.EncryptedUsername)
+		password := nssDecrypt(handle, login.EncryptedPassword)
 		results = append(results, types.PasswordResult{
 			URL:      login.Hostname,
 			Username: username,
@@ -135,7 +114,7 @@ func nssDecryptLogins(profilePath, browserName string, logins []firefoxLogin) []
 	return results
 }
 
-func nssDecryptUnix(handle unsafe.Pointer, b64 string) string {
+func nssDecrypt(handle unsafe.Pointer, b64 string) string {
 	b64 = strings.TrimSpace(b64)
 	if b64 == "" {
 		return ""

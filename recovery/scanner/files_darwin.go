@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build darwin
 
 package scanner
 
@@ -7,8 +7,7 @@ func getScanLocations() []scanLocation {
 		{"Desktop", "Desktop"},
 		{"Documents", "Documents"},
 		{"Downloads", "Downloads"},
-		{".local/share", ".local/share"},
+		{"Library/Application Support", "AppSupport"},
 		{"Dropbox", "Dropbox"},
-		{"snap", "Snap"},
 	}
 }

