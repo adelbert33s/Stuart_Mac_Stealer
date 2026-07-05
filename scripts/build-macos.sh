@@ -23,13 +23,14 @@ if [[ "${OBFUSCATE:-false}" == "true" ]]; then
     echo "garble not found. Install with: go install mvdan.cc/garble@latest" >&2
     exit 1
   fi
-  GARBLE_ARGS=()
   if [[ -n "${GARBLE_FLAGS:-}" ]]; then
-    # shellcheck disable=SC2206
-    GARBLE_ARGS=(${GARBLE_FLAGS})
+    echo "Obfuscation enabled (garble ${GARBLE_FLAGS})"
+    # shellcheck disable=SC2086
+    BUILD_CMD=(garble ${GARBLE_FLAGS} build -ldflags="${LDFLAGS}")
+  else
+    echo "Obfuscation enabled (garble default)"
+    BUILD_CMD=(garble build -ldflags="${LDFLAGS}")
   fi
-  echo "Obfuscation enabled (garble ${GARBLE_ARGS[*]:-<default>})"
-  BUILD_CMD=(garble "${GARBLE_ARGS[@]}" build -ldflags="${LDFLAGS}")
 fi
 
 pushd "${ROOT}" >/dev/null
