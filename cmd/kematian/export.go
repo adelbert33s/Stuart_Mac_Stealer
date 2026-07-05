@@ -25,7 +25,8 @@ type archiveEntry struct {
 func buildPrimaryArchiveEntries(p *harvestPayload) ([]archiveEntry, error) {
 	var entries []archiveEntry
 
-	for name, data := range expandLargeLogParts(buildAllLogFiles(p), maxDiscordUpload/2) {
+	splitAt := maxDiscordUpload / 2
+	for name, data := range expandLargeLogParts(buildAllLogFiles(p), splitAt) {
 		entries = append(entries, archiveEntry{zipPath: name, data: data})
 	}
 
@@ -63,23 +64,29 @@ func buildPrimaryArchiveEntries(p *harvestPayload) ([]archiveEntry, error) {
 	return entries, nil
 }
 
-func buildPrimaryZipChunks(p *harvestPayload) ([][]byte, error) {
+func buildPrimaryZipChunks(p *harvestPayload, maxChunk int) ([][]byte, error) {
 	entries, err := buildPrimaryArchiveEntries(p)
 	if err != nil {
 		return nil, err
 	}
-	return zipArchiveEntriesChunked(entries, maxDiscordUpload)
+	if maxChunk <= 0 {
+		maxChunk = maxDiscordUpload
+	}
+	return zipArchiveEntriesChunked(entries, maxChunk)
 }
 
-func buildScannedFilesZipChunks(p *harvestPayload) ([][]byte, int, error) {
-	entries, skippedLarge := buildScannedFileEntries(p)
+func buildScannedFilesZipChunks(p *harvestPayload, maxFileBytes int64, maxChunk int) ([][]byte, int, error) {
+	entries, skippedLarge := buildScannedFileEntries(p, maxFileBytes)
 	if len(entries) == 0 {
 		return nil, skippedLarge, nil
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].zipPath < entries[j].zipPath
 	})
-	chunks, err := zipArchiveEntriesChunked(entries, maxDiscordUpload)
+	if maxChunk <= 0 {
+		maxChunk = maxDiscordUpload
+	}
+	chunks, err := zipArchiveEntriesChunked(entries, maxChunk)
 	return chunks, skippedLarge, err
 }
 

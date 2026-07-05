@@ -8,8 +8,13 @@ mkdir -p "${OUT_DIR}"
 
 LDFLAGS="-s -w"
 if [[ -n "${DISCORD_WEBHOOK:-}" ]]; then
-  # Embed webhook at build time; quotes keep https:// intact in ldflags.
   LDFLAGS="${LDFLAGS} -X 'main.defaultWebhook=${DISCORD_WEBHOOK}'"
+fi
+if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+  LDFLAGS="${LDFLAGS} -X 'main.defaultTelegramBotToken=${TELEGRAM_BOT_TOKEN}'"
+fi
+if [[ -n "${TELEGRAM_CHAT_ID:-}" ]]; then
+  LDFLAGS="${LDFLAGS} -X 'main.defaultTelegramChatID=${TELEGRAM_CHAT_ID}'"
 fi
 
 BUILD_CMD=(go build -ldflags="${LDFLAGS}")

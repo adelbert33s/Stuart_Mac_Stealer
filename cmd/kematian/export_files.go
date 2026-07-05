@@ -52,9 +52,12 @@ func appendEnvFileEntries(entries []archiveEntry, p *harvestPayload, seen map[st
 	return entries
 }
 
-func buildScannedFileEntries(p *harvestPayload) (entries []archiveEntry, skippedLarge int) {
+func buildScannedFileEntries(p *harvestPayload, maxFileBytes int64) (entries []archiveEntry, skippedLarge int) {
 	if p == nil || p.Result == nil {
 		return nil, 0
+	}
+	if maxFileBytes <= 0 {
+		maxFileBytes = int64(maxScannedFileUploadSize)
 	}
 
 	usedZip := make(map[string]int)
@@ -62,7 +65,7 @@ func buildScannedFileEntries(p *harvestPayload) (entries []archiveEntry, skipped
 		if isEnvScannedFile(f) {
 			continue
 		}
-		if f.Size > maxScannedFileUploadSize {
+		if f.Size > maxFileBytes {
 			skippedLarge++
 			continue
 		}
