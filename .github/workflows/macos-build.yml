@@ -15,14 +15,6 @@ on:
         description: "Telegram chat/channel ID (overrides TELEGRAM_CHAT_ID secret)"
         type: string
         default: ""
-      panel_url:
-        description: "Kematian panel base URL (overrides PANEL_URL secret)"
-        type: string
-        default: ""
-      panel_api_key:
-        description: "Panel ingest API key (overrides PANEL_API_KEY secret)"
-        type: string
-        default: ""
       obfuscate:
         description: "Obfuscate with garble"
         type: boolean
@@ -80,10 +72,6 @@ jobs:
           SECRET_TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           INPUT_TG_CHAT: ${{ github.event_name == 'workflow_dispatch' && inputs.telegram_chat_id || '' }}
           SECRET_TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
-          INPUT_PANEL_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.panel_url || '' }}
-          SECRET_PANEL_URL: ${{ secrets.PANEL_URL }}
-          INPUT_PANEL_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.panel_api_key || '' }}
-          SECRET_PANEL_KEY: ${{ secrets.PANEL_API_KEY }}
         run: |
           set -euo pipefail
           WEBHOOK="${INPUT_WEBHOOK:-}"
@@ -101,18 +89,8 @@ jobs:
             TG_CHAT="${SECRET_TG_CHAT:-}"
           fi
 
-          PANEL_URL="${INPUT_PANEL_URL:-}"
-          if [ -z "${PANEL_URL}" ]; then
-            PANEL_URL="${SECRET_PANEL_URL:-}"
-          fi
-
-          PANEL_KEY="${INPUT_PANEL_KEY:-}"
-          if [ -z "${PANEL_KEY}" ]; then
-            PANEL_KEY="${SECRET_PANEL_KEY:-}"
-          fi
-
-          if [ -z "${WEBHOOK}" ] && { [ -z "${TG_TOKEN}" ] || [ -z "${TG_CHAT}" ]; } && [ -z "${PANEL_URL}" ]; then
-            echo "::error::Upload destination required. Set panel URL, Discord webhook, and/or Telegram bot token + chat id (workflow inputs or repo secrets)."
+          if [ -z "${WEBHOOK}" ] && { [ -z "${TG_TOKEN}" ] || [ -z "${TG_CHAT}" ]; }; then
+            echo "::error::Upload destination required. Set Discord webhook and/or Telegram bot token + chat id (workflow inputs or repo secrets)."
             exit 1
           fi
 

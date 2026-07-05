@@ -181,20 +181,6 @@ func uploadSingleFile(cfg uploadConfig, title, summary, filename string, data []
 		}
 	}
 
-	if cfg.usePanel() {
-		meta := panelUploadMeta{
-			Hostname:  cfg.Hostname,
-			OS:        cfg.OS,
-			Arch:      cfg.Arch,
-			Phase:     ctx.Phase,
-			PartNum:   ctx.PartNum,
-			PartTotal: ctx.PartTotal,
-		}
-		if err := sendPanelUpload(cfg.PanelURL, cfg.PanelAPIKey, title, summary, filename, data, meta); err != nil {
-			errs = append(errs, "panel: "+err.Error())
-		}
-	}
-
 	if len(errs) == 0 {
 		return nil
 	}
@@ -214,20 +200,14 @@ func uploadDelay(cfg uploadConfig) {
 }
 
 func uploadDestLabel(cfg uploadConfig) string {
-	var parts []string
-	if cfg.usePanel() {
-		parts = append(parts, "panel")
+	switch {
+	case cfg.useDiscord() && cfg.useTelegram():
+		return "telegram+discord"
+	case cfg.useTelegram():
+		return "telegram"
+	default:
+		return "discord"
 	}
-	if cfg.useTelegram() {
-		parts = append(parts, "telegram")
-	}
-	if cfg.useDiscord() {
-		parts = append(parts, "discord")
-	}
-	if len(parts) == 0 {
-		return "none"
-	}
-	return strings.Join(parts, "+")
 }
 
 func joinErrors(errs []string) string {
