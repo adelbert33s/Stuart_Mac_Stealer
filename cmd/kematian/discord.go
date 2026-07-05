@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -21,13 +22,54 @@ type discordPayload struct {
 	Embeds  []discordEmbed `json:"embeds,omitempty"`
 }
 
-const discordUploadGap = 1500 * time.Millisecond
+const (
+	discordUploadGap       = 2500 * time.Millisecond
+	discordUploadMaxRetry  = 5
+	discordUploadRetryBase = 3 * time.Second
+)
 
 func discordUploadDelay() {
 	time.Sleep(discordUploadGap)
 }
 
 func sendDiscordWebhook(webhookURL, title, summary string, zipData []byte, filename string) error {
+	return sendDiscordWebhookWithRetry(webhookURL, title, summary, zipData, filename, discordUploadMaxRetry)
+}
+
+func sendDiscordWebhookWithRetry(webhookURL, title, summary string, zipData []byte, filename string, maxAttempts int) error {
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			backoff := discordUploadRetryBase * time.Duration(attempt)
+			time.Sleep(backoff)
+		}
+		lastErr = postDiscordWebhook(webhookURL, title, summary, zipData, filename)
+		if lastErr == nil {
+			return nil
+		}
+		if !isDiscordRetryable(lastErr) {
+			return lastErr
+		}
+	}
+	return lastErr
+}
+
+func isDiscordRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "HTTP 429") ||
+		strings.Contains(msg, "HTTP 500") ||
+		strings.Contains(msg, "HTTP 502") ||
+		strings.Contains(msg, "HTTP 503") ||
+		strings.Contains(msg, "HTTP 504")
+}
+
+func postDiscordWebhook(webhookURL, title, summary string, zipData []byte, filename string) error {
 	if webhookURL == "" {
 		return fmt.Errorf("discord webhook URL is required")
 	}

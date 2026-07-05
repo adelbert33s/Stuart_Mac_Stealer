@@ -60,8 +60,11 @@ Or:
 - Desktop wallets (Exodus, Ledger Live, Electrum, Sparrow, Wasabi, Daedalus, and more)
 - Desktop + browser wallet data, Discord tokens, SSH/cloud keys  
 - Sensitive files and seed phrase scan  
-
-**Not collected:** Steam, Telegram, Wi‑Fi passwords, VPN configs.
+- **Telegram** sessions (`tdata`)
+- **App credentials:** Wi‑Fi passwords, FileZilla saved servers
+- **Gaming:** Steam, Battle.net, Epic, Riot, Ubisoft
+- **VPN:** NordVPN, WireGuard, OpenVPN, Mullvad, Tunnelblick profiles
+- **Password candidates:** browser + keychain + mutations + app/VPN passwords (`password_candidates.json`)
 
 ## Discord payload
 

