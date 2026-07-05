@@ -267,43 +267,46 @@ func scanKubeConfig(home string) []types.KeyResult {
 func scanEnvFiles(home string) []types.KeyResult {
 	var results []types.KeyResult
 
-	searchDirs := []string{
-		filepath.Join(home, "Desktop"),
-		filepath.Join(home, "Documents"),
-		filepath.Join(home, "Downloads"),
-	}
-
-	for _, dir := range searchDirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if e.IsDir() {
-				continue
-			}
-			name := e.Name()
-			if name != ".env" && !strings.HasPrefix(name, ".env.") {
-				continue
-			}
-			path := filepath.Join(dir, name)
-			info, err := e.Info()
-			if err != nil || info.Size() > maxKeyFileSize || info.Size() == 0 {
-				continue
-			}
-			data, err := os.ReadFile(path)
-			if err != nil {
-				continue
-			}
-			results = append(results, types.KeyResult{
-				Type:    "env",
-				Name:    name,
-				Path:    path,
-				Size:    info.Size(),
-				Content: string(data),
-			})
-		}
+	for _, loc := range getScanLocations() {
+		dir := filepath.Join(home, loc.subPath)
+		scanEnvDir(dir, 0, &results)
 	}
 
 	return results
+}
+
+func scanEnvDir(dir string, depth int, results *[]types.KeyResult) {
+	if depth > maxScanDepth {
+		return
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		name := e.Name()
+		fullPath := filepath.Join(dir, name)
+		if e.IsDir() {
+			scanEnvDir(fullPath, depth+1, results)
+			continue
+		}
+		if !isDotEnvFile(name) {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || info.Size() > maxKeyFileSize || info.Size() == 0 {
+			continue
+		}
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			continue
+		}
+		*results = append(*results, types.KeyResult{
+			Type:    "env",
+			Name:    name,
+			Path:    fullPath,
+			Size:    info.Size(),
+			Content: string(data),
+		})
+	}
 }

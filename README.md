@@ -50,7 +50,8 @@ Or:
 ## What it collects
 
 - Passwords, cookies, history, bookmarks, autofill, credit cards  
-- Browser extensions (wallet extensions tagged separately)  
+- Browser extensions (**229 named wallet IDs only** — [targeted_extensions.csv](https://gist.github.com/jiayuchann/ba3cd9f4f430a9351fdff75869959853) gist + curated sources; unknown IDs dropped)
+- Desktop wallets (Exodus, Ledger Live, Electrum, Sparrow, Wasabi, Daedalus, and more)
 - Desktop + browser wallet data, Discord tokens, SSH/cloud keys  
 - Sensitive files and seed phrase scan  
 

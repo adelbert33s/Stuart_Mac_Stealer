@@ -41,6 +41,11 @@ var targetExtensions = map[string]bool{
 	".heic": true, ".heif": true,
 }
 
+func isDotEnvFile(name string) bool {
+	lower := strings.ToLower(name)
+	return lower == ".env" || strings.HasPrefix(lower, ".env.")
+}
+
 // seedScanExtensions are the text formats we read during the scan to check for seed phrases.
 var seedScanExtensions = map[string]bool{
 	".txt": true, ".md": true, ".csv": true, ".tsv": true,
@@ -92,8 +97,11 @@ func scanDir(dir, label string, depth int, results *[]types.FileResult, seen map
 		}
 
 		name := e.Name()
-		// skip hidden / system files
-		if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "$") {
+		// skip hidden / system files (except dotenv secrets)
+		if strings.HasPrefix(name, "$") {
+			continue
+		}
+		if strings.HasPrefix(name, ".") && !isDotEnvFile(name) {
 			continue
 		}
 

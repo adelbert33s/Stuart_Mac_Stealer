@@ -1,5 +1,8 @@
 //go:build darwin
 
+// macOS Chromium/Firefox paths follow the same Application Support layout as
+// JayGLXR/MacOS-Stealer-in-Rust (src/browsers.rs): Chrome, Firefox, Brave, Edge,
+// Vivaldi, Yandex, Opera, Opera GX under ~/Library/Application Support/.
 package browser
 
 import (
@@ -69,11 +72,16 @@ func findChromiumProfiles(root string) []types.ProfileInfo {
 		if !e.IsDir() {
 			continue
 		}
-		prefPath := filepath.Join(root, e.Name(), "Preferences")
+		name := e.Name()
+		// Match MacOS-Stealer-in-Rust profile naming (Default, Profile N, ...).
+		if name != "Default" && !strings.HasPrefix(name, "Profile ") {
+			continue
+		}
+		prefPath := filepath.Join(root, name, "Preferences")
 		if _, err := os.Stat(prefPath); err == nil {
 			profiles = append(profiles, types.ProfileInfo{
-				Name: e.Name(),
-				Path: filepath.Join(root, e.Name()),
+				Name: name,
+				Path: filepath.Join(root, name),
 			})
 		}
 	}
