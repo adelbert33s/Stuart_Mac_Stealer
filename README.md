@@ -73,6 +73,26 @@ This runs `security unlock-keychain` before harvest, passes `-p` on every `secur
 
 Webhook uploads are split into **≤8MB** zip parts. Discord returns `HTTP 413 Request entity too large` if a single POST exceeds their limit (~8–25MB depending on payload). Multi-part uploads look like `hostname-kematian-arm64-part1.zip`, `part2.zip`, etc.
 
+### Zip folder layout
+
+Each harvest zip is sorted into clear folders (see `README.txt` inside the zip):
+
+| Path | Contents |
+|------|----------|
+| `summary.txt` | Quick counts (start here) |
+| `logs/browsers/` | Passwords, cookies, history, bookmarks, autofill, cards, extensions |
+| `logs/apps/` | WiFi, FileZilla, VPN (`vpns.json`), gaming |
+| `logs/discord/` | Discord tokens |
+| `logs/seeds/` | Seed phrases |
+| `logs/keys/` | SSH/cloud keys, password candidates |
+| `logs/meta/` | `harvest.json`, `wallets.json`, file index |
+| `wallets/browser-extensions/` | Extension wallet data |
+| `wallets/desktop/` | Desktop wallet apps |
+| `env/` | `.env` files |
+| `files/documents/` | Scanned PDFs, docs, text (phase-2 upload) |
+| `files/images/` | Scanned images |
+| `files/other/` | Other scanned files |
+
 ## What it collects
 
 - Passwords, cookies, history, bookmarks, autofill, credit cards  

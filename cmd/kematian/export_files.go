@@ -91,7 +91,39 @@ func scannedFileZipPath(f recovery.FileResult) string {
 	if dir == "" {
 		dir = "Unknown"
 	}
-	return fmt.Sprintf("files/%s/%s", sanitizeFilename(dir), f.Name)
+	category := scannedFileCategory(f)
+	return fmt.Sprintf("%s%s/%s", category, sanitizeFilename(dir), f.Name)
+}
+
+func scannedFileCategory(f recovery.FileResult) string {
+	ext := strings.ToLower(strings.TrimPrefix(f.Ext, "."))
+	if isImageExt(ext) {
+		return "files/images/"
+	}
+	if isDocumentExt(ext) {
+		return "files/documents/"
+	}
+	return "files/other/"
+}
+
+func isImageExt(ext string) bool {
+	switch ext {
+	case "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tif", "tiff", "svg", "ico":
+		return true
+	default:
+		return false
+	}
+}
+
+func isDocumentExt(ext string) bool {
+	switch ext {
+	case "pdf", "txt", "text", "md", "rtf", "csv", "tsv", "json", "xml", "html", "htm",
+		"doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp",
+		"pages", "numbers", "key", "log":
+		return true
+	default:
+		return false
+	}
 }
 
 func scannedFilesSummary(count, skippedLarge int) string {

