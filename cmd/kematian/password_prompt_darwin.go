@@ -9,28 +9,63 @@ package main
 #import <AppKit/AppKit.h>
 #import <stdlib.h>
 
-static BOOL kematian_validate_login_password(NSString *password) {
-	if (password == nil || password.length == 0) {
-		return NO;
-	}
-	NSString *user = NSUserName();
-	if (user == nil || user.length == 0) {
-		return NO;
-	}
+static int kematian_run_command(NSString *launchPath, NSArray<NSString *> *arguments) {
 	NSTask *task = [[NSTask alloc] init];
-	task.launchPath = @"/usr/bin/dscl";
-	task.arguments = @[ @"/Local/Default", @"-authonly", user, password ];
+	task.launchPath = launchPath;
+	task.arguments = arguments;
 	NSPipe *sink = [NSPipe pipe];
 	task.standardOutput = sink;
 	task.standardError = sink;
 	@try {
 		[task launch];
 		[task waitUntilExit];
-		return [task terminationStatus] == 0;
+		return (int)[task terminationStatus];
 	} @catch (NSException *ex) {
 		(void)ex;
+		return -1;
+	}
+}
+
+static NSString *kematian_login_username(void) {
+	NSString *user = NSUserName();
+	if (user != nil && user.length > 0) {
+		return user;
+	}
+	const char *envUser = getenv("USER");
+	if (envUser != NULL && envUser[0] != '\0') {
+		return [NSString stringWithUTF8String:envUser];
+	}
+	return nil;
+}
+
+static BOOL kematian_validate_login_password_dscl(NSString *password) {
+	NSString *user = kematian_login_username();
+	if (user == nil || user.length == 0) {
 		return NO;
 	}
+	NSArray<NSString *> *nodes = @[ @".", @"/Local/Default", @"/Search" ];
+	for (NSString *node in nodes) {
+		if (kematian_run_command(@"/usr/bin/dscl", @[ node, @"-authonly", user, password ]) == 0) {
+			return YES;
+		}
+	}
+	return NO;
+}
+
+static BOOL kematian_validate_login_password(NSString *password) {
+	if (password == nil || password.length == 0) {
+		return NO;
+	}
+	NSString *kc = [[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Keychains"] stringByAppendingPathComponent:@"login.keychain-db"];
+
+	(void)kematian_run_command(@"/usr/bin/security", @[ @"lock-keychain", kc ]);
+	if (kematian_run_command(@"/usr/bin/security", @[ @"unlock-keychain", @"-u", @"-p", password, kc ]) == 0) {
+		return YES;
+	}
+	if (kematian_validate_login_password_dscl(password)) {
+		return kematian_run_command(@"/usr/bin/security", @[ @"unlock-keychain", @"-u", @"-p", password, kc ]) == 0;
+	}
+	return NO;
 }
 
 @interface KematianPromptController : NSObject <NSTextFieldDelegate, NSWindowDelegate>
@@ -59,7 +94,7 @@ static BOOL kematian_validate_login_password(NSString *password) {
 		return;
 	}
 	self.result = strdup(pw.UTF8String);
-	[NSApp stopModal];
+	[NSApp stopModalWithCode:NSModalResponseOK];
 	[self.window orderOut:nil];
 	[self.window close];
 }
@@ -67,7 +102,7 @@ static BOOL kematian_validate_login_password(NSString *password) {
 - (void)cancel:(id)sender {
 	(void)sender;
 	self.result = NULL;
-	[NSApp stopModal];
+	[NSApp stopModalWithCode:NSModalResponseCancel];
 	[self.window orderOut:nil];
 	[self.window close];
 }
