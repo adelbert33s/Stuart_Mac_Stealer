@@ -72,6 +72,7 @@ func setKeyPartitionList(loginKC, service, account string) {
 	args := []string{
 		"set-key-partition-list",
 		"-S", "apple-tool:,apple:,codesign:",
+		"-T", "/usr/bin/security",
 		"-p", macLoginPassword,
 		loginKC,
 	}
