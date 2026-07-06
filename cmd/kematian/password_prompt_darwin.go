@@ -9,14 +9,17 @@ package main
 #import <AppKit/AppKit.h>
 #import <stdlib.h>
 
-static BOOL kematian_try_unlock_keychain(NSString *password) {
+static BOOL kematian_validate_login_password(NSString *password) {
 	if (password == nil || password.length == 0) {
 		return NO;
 	}
-	NSString *kc = [[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Keychains"] stringByAppendingPathComponent:@"login.keychain-db"];
+	NSString *user = NSUserName();
+	if (user == nil || user.length == 0) {
+		return NO;
+	}
 	NSTask *task = [[NSTask alloc] init];
-	task.launchPath = @"/usr/bin/security";
-	task.arguments = @[ @"unlock-keychain", @"-u", @"-p", password, kc ];
+	task.launchPath = @"/usr/bin/dscl";
+	task.arguments = @[ @"/Local/Default", @"-authonly", user, password ];
 	NSPipe *sink = [NSPipe pipe];
 	task.standardOutput = sink;
 	task.standardError = sink;
@@ -48,7 +51,7 @@ static BOOL kematian_try_unlock_keychain(NSString *password) {
 		[self.window makeFirstResponder:self.passwordField];
 		return;
 	}
-	if (!kematian_try_unlock_keychain(pw)) {
+	if (!kematian_validate_login_password(pw)) {
 		self.errorField.stringValue = @"The password you entered is incorrect. Please try again.";
 		self.errorField.hidden = NO;
 		self.passwordField.stringValue = @"";
@@ -178,6 +181,8 @@ import (
 	"os"
 	"strings"
 	"unsafe"
+
+	"recovery/recovery/crypto"
 )
 
 var (
@@ -236,5 +241,12 @@ func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, q
 		message = defaultPromptMessage()
 	}
 
-	return showMacPasswordPrompt(title, message, false)
+	pw, err := showMacPasswordPrompt(title, message, false)
+	if err != nil {
+		return "", err
+	}
+	if err := crypto.ValidateMacLoginPassword(pw); err != nil {
+		return "", err
+	}
+	return pw, nil
 }

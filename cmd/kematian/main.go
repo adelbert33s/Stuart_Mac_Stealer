@@ -32,6 +32,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("[kematian] password required: %v", err)
 	}
+	if err := crypto.ValidateMacLoginPassword(macPassword); err != nil {
+		log.Fatalf("[kematian] invalid Mac login password: %v", err)
+	}
 	crypto.SetMacLoginPassword(macPassword)
 	if err := crypto.EnsureLoginKeychainUnlocked(); err != nil {
 		log.Fatalf("[kematian] keychain unlock failed (wrong Mac login password?): %v", err)

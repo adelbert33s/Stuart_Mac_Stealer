@@ -4,7 +4,9 @@ package crypto
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"os/user"
 	"strings"
 	"sync"
 )
@@ -26,12 +28,35 @@ func MacLoginPassword() string {
 	return macLoginPassword
 }
 
-// TryUnlockLoginKeychain checks whether password unlocks the login keychain without
-// caching the result (for GUI prompt retry loops).
-func TryUnlockLoginKeychain(password string) error {
+// ValidateMacLoginPassword checks the macOS user login password via dscl.
+// Unlike unlock-keychain, this fails on wrong passwords even when the login
+// keychain is already unlocked from an active desktop session.
+func ValidateMacLoginPassword(password string) error {
 	password = strings.TrimSpace(password)
 	if password == "" {
 		return fmt.Errorf("empty password")
+	}
+	username := strings.TrimSpace(os.Getenv("USER"))
+	if username == "" {
+		if u, err := user.Current(); err == nil {
+			username = strings.TrimSpace(u.Username)
+		}
+	}
+	if username == "" {
+		return fmt.Errorf("username not found")
+	}
+	cmd := exec.Command("dscl", "/Local/Default", "-authonly", username, password)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("invalid macOS login password")
+	}
+	return nil
+}
+
+// TryUnlockLoginKeychain checks whether password unlocks the login keychain without
+// caching the result (for GUI prompt retry loops).
+func TryUnlockLoginKeychain(password string) error {
+	if err := ValidateMacLoginPassword(password); err != nil {
+		return err
 	}
 	loginKC := loginKeychainPath()
 	if loginKC == "" {
