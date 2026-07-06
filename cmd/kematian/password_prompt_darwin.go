@@ -106,7 +106,7 @@ static BOOL kematian_validate_login_password(NSString *password) {
 }
 
 @interface KematianAlertDelegate : NSObject <NSTextFieldDelegate>
-@property (nonatomic, weak) NSButton *defaultButton;
+@property (nonatomic, assign) NSButton *defaultButton;
 @end
 
 @implementation KematianAlertDelegate
