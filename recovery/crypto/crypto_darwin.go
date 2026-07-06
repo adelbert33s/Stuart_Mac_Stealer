@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strings"
 
 	"recovery/recovery/browser"
 	"recovery/recovery/types"
