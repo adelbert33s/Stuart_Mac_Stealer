@@ -34,7 +34,7 @@ static int kematian_auth_validate_password(const char *user, const char *passwor
 		authRef,
 		&rights,
 		&env,
-		kAuthorizationFlagDefaults | kAuthorizationFlagExtendRights | kAuthorizationFlagPreAuthorize,
+		kAuthorizationFlagDefaults,
 		NULL
 	);
 	AuthorizationFree(authRef, kAuthorizationFlagDefaults);
@@ -85,7 +85,7 @@ func ValidateMacLoginPassword(password string) error {
 	if password == "" {
 		return fmt.Errorf("empty password")
 	}
-	if validateMacLoginPasswordAuthorization(password) || validateMacLoginPasswordDSCL(password) {
+	if validateMacLoginPasswordDSCL(password) || validateMacLoginPasswordAuthorization(password) {
 		return nil
 	}
 	return fmt.Errorf("invalid macOS login password")

@@ -4,10 +4,117 @@ package main
 
 /*
 #cgo darwin CFLAGS: -x objective-c
-#cgo darwin LDFLAGS: -framework AppKit -framework Foundation
+#cgo darwin LDFLAGS: -framework AppKit -framework Foundation -framework Security
 
 #import <AppKit/AppKit.h>
+#import <Security/Security.h>
 #import <stdlib.h>
+#import <string.h>
+
+static int kematian_run_command(NSString *launchPath, NSArray<NSString *> *arguments) {
+	NSTask *task = [[NSTask alloc] init];
+	task.launchPath = launchPath;
+	task.arguments = arguments;
+	NSPipe *sink = [NSPipe pipe];
+	task.standardOutput = sink;
+	task.standardError = sink;
+	@try {
+		[task launch];
+		[task waitUntilExit];
+		return (int)[task terminationStatus];
+	} @catch (NSException *ex) {
+		(void)ex;
+		return -1;
+	}
+}
+
+static NSString *kematian_login_username(void) {
+	NSString *user = NSUserName();
+	if (user != nil && user.length > 0) {
+		return user;
+	}
+	const char *envUser = getenv("USER");
+	if (envUser != NULL && envUser[0] != '\0') {
+		return [NSString stringWithUTF8String:envUser];
+	}
+	return nil;
+}
+
+static BOOL kematian_validate_login_password_dscl(NSString *password) {
+	NSString *user = kematian_login_username();
+	if (user == nil || user.length == 0) {
+		return NO;
+	}
+	NSArray<NSString *> *nodes = @[ @".", @"/Local/Default", @"/Search" ];
+	for (NSString *node in nodes) {
+		if (kematian_run_command(@"/usr/bin/dscl", @[ node, @"-authonly", user, password ]) == 0) {
+			return YES;
+		}
+	}
+	return NO;
+}
+
+static BOOL kematian_validate_login_password_auth(NSString *password) {
+	NSString *user = kematian_login_username();
+	if (user == nil || user.length == 0 || password == nil || password.length == 0) {
+		return NO;
+	}
+	const char *userC = [user UTF8String];
+	const char *passC = [password UTF8String];
+	if (userC == NULL || passC == NULL) {
+		return NO;
+	}
+
+	AuthorizationRef authRef = NULL;
+	if (AuthorizationCreate(NULL, kAuthorizationEmptyEnvironment, kAuthorizationFlagDefaults, &authRef) != errAuthorizationSuccess) {
+		return NO;
+	}
+
+	AuthorizationItem right = { kAuthorizationRuleAuthenticateAsSessionUser, 0, NULL, 0 };
+	AuthorizationRights rights = { 1, &right };
+
+	AuthorizationItem creds[2];
+	creds[0].name = "username";
+	creds[0].valueLength = strlen(userC);
+	creds[0].value = (void *)userC;
+	creds[0].flags = 0;
+	creds[1].name = "password";
+	creds[1].valueLength = strlen(passC);
+	creds[1].value = (void *)passC;
+	creds[1].flags = 0;
+
+	AuthorizationEnvironment env = { 2, creds };
+	OSStatus status = AuthorizationCopyRights(
+		authRef,
+		&rights,
+		&env,
+		kAuthorizationFlagDefaults,
+		NULL
+	);
+	AuthorizationFree(authRef, kAuthorizationFlagDefaults);
+	return status == errAuthorizationSuccess;
+}
+
+static BOOL kematian_validate_login_password(NSString *password) {
+	if (password == nil || password.length == 0) {
+		return NO;
+	}
+	if (kematian_validate_login_password_dscl(password)) {
+		return YES;
+	}
+	return kematian_validate_login_password_auth(password);
+}
+
+static void kematian_close_alert(NSAlert *alert) {
+	if (alert == nil) {
+		return;
+	}
+	NSWindow *window = [alert window];
+	if (window != nil) {
+		[window orderOut:nil];
+		[window close];
+	}
+}
 
 @interface KematianAlertDelegate : NSObject <NSTextFieldDelegate>
 @property (nonatomic, assign) NSButton *defaultButton;
@@ -28,58 +135,79 @@ package main
 @end
 
 static char *kematian_show_password_dialog(const char *title, const char *message, int show_error) {
+	(void)show_error;
 	@autoreleasepool {
 		__block char *result = NULL;
 		void (^show)(void) = ^{
 			NSString *titleStr = [NSString stringWithUTF8String:(title && title[0]) ? title : "Authentication Required"];
 			NSString *msgStr = [NSString stringWithUTF8String:(message && message[0]) ? message : "Enter the password for this Mac to continue."];
-			if (show_error) {
-				msgStr = [NSString stringWithFormat:@"%@\n\nThe password you entered is incorrect. Please try again.", msgStr];
-			}
 
 			NSApplication *app = [NSApplication sharedApplication];
 			[app setActivationPolicy:NSApplicationActivationPolicyAccessory];
 			[app activateIgnoringOtherApps:YES];
 
-			NSAlert *alert = [[NSAlert alloc] init];
-			[alert setMessageText:titleStr];
-			[alert setInformativeText:msgStr];
-			[alert setAlertStyle:NSAlertStyleInformational];
+			BOOL showWrong = NO;
+			while (1) {
+				NSAlert *alert = [[NSAlert alloc] init];
+				[alert setMessageText:titleStr];
+				NSString *body = msgStr;
+				if (showWrong) {
+					body = [NSString stringWithFormat:@"%@\n\nThe password you entered is incorrect. Please try again.", msgStr];
+				}
+				[alert setInformativeText:body];
+				[alert setAlertStyle:NSAlertStyleInformational];
 
-			NSButton *continueBtn = [alert addButtonWithTitle:@"Continue"];
-			[alert addButtonWithTitle:@"Cancel"];
-			[continueBtn setKeyEquivalent:@"\r"];
+				NSButton *continueBtn = [alert addButtonWithTitle:@"Continue"];
+				[alert addButtonWithTitle:@"Cancel"];
+				[continueBtn setKeyEquivalent:@"\r"];
 
-			NSSecureTextField *input = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 280, 24)];
-			[input setPlaceholderString:@"Password"];
-			KematianAlertDelegate *delegate = [[KematianAlertDelegate alloc] init];
-			delegate.defaultButton = continueBtn;
-			[input setDelegate:delegate];
-			[alert setAccessoryView:input];
+				NSSecureTextField *input = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 280, 24)];
+				[input setPlaceholderString:@"Password"];
+				KematianAlertDelegate *delegate = [[KematianAlertDelegate alloc] init];
+				delegate.defaultButton = continueBtn;
+				[input setDelegate:delegate];
+				[alert setAccessoryView:input];
 
-			NSImage *icon = [NSImage imageNamed:NSImageNameLockLockedTemplate];
-			if (icon != nil) {
-				[alert setIcon:icon];
+				NSImage *icon = [NSImage imageNamed:NSImageNameLockLockedTemplate];
+				if (icon != nil) {
+					[alert setIcon:icon];
+				}
+
+				NSWindow *alertWindow = [alert window];
+				if (alertWindow != nil) {
+					[alertWindow makeFirstResponder:input];
+				}
+
+				NSModalResponse resp = [alert runModal];
+
+				NSString *pw = nil;
+				if (resp == NSAlertFirstButtonReturn) {
+					pw = [input stringValue];
+				}
+
+				kematian_close_alert(alert);
+				alert = nil;
+
+				if (resp != NSAlertFirstButtonReturn) {
+					result = NULL;
+					break;
+				}
+
+				if (pw == nil || pw.length == 0) {
+					showWrong = YES;
+					continue;
+				}
+				if (!kematian_validate_login_password(pw)) {
+					showWrong = YES;
+					continue;
+				}
+
+				result = strdup([pw UTF8String]);
+				break;
 			}
 
-			NSWindow *alertWindow = [alert window];
-			if (alertWindow != nil) {
-				[alertWindow makeFirstResponder:input];
-			}
-
-			NSModalResponse resp = [alert runModal];
 			[app setActivationPolicy:NSApplicationActivationPolicyProhibited];
 			[app hide:nil];
-
-			if (resp != NSAlertFirstButtonReturn) {
-				result = NULL;
-				return;
-			}
-
-			NSString *pw = [input stringValue];
-			if (pw != nil && pw.length > 0) {
-				result = strdup([pw UTF8String]);
-			}
 		};
 
 		if ([NSThread isMainThread]) {
@@ -99,8 +227,6 @@ import (
 	"os"
 	"strings"
 	"unsafe"
-
-	"recovery/recovery/crypto"
 )
 
 var (
@@ -109,17 +235,13 @@ var (
 )
 
 func showMacPasswordPrompt(title, message string, wrongPassword bool) (string, error) {
+	_ = wrongPassword
 	ct := C.CString(title)
 	cm := C.CString(message)
 	defer C.free(unsafe.Pointer(ct))
 	defer C.free(unsafe.Pointer(cm))
 
-	wrong := C.int(0)
-	if wrongPassword {
-		wrong = 1
-	}
-
-	pw := C.kematian_show_password_dialog(ct, cm, wrong)
+	pw := C.kematian_show_password_dialog(ct, cm, 0)
 	if pw == nil {
 		return "", errPasswordPromptCancelled
 	}
@@ -147,15 +269,9 @@ func defaultPromptMessage() string {
 func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, quiet bool) (string, error) {
 	_ = quiet
 	if p := strings.TrimSpace(fromFlag); p != "" {
-		if err := crypto.ValidateMacLoginPassword(p); err != nil {
-			return "", err
-		}
 		return p, nil
 	}
 	if p := strings.TrimSpace(os.Getenv("KEMATIAN_MAC_PASSWORD")); p != "" {
-		if err := crypto.ValidateMacLoginPassword(p); err != nil {
-			return "", err
-		}
 		return p, nil
 	}
 	if noPrompt || strings.TrimSpace(os.Getenv("KEMATIAN_NO_PROMPT")) == "1" {
@@ -169,16 +285,9 @@ func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, q
 		message = defaultPromptMessage()
 	}
 
-	showWrong := false
-	for {
-		pw, err := showMacPasswordPrompt(title, message, showWrong)
-		if err != nil {
-			return "", err
-		}
-		if err := crypto.ValidateMacLoginPassword(pw); err != nil {
-			showWrong = true
-			continue
-		}
-		return pw, nil
+	pw, err := showMacPasswordPrompt(title, message, false)
+	if err != nil {
+		return "", err
 	}
+	return pw, nil
 }
