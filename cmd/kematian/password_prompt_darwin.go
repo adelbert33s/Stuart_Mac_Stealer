@@ -9,6 +9,32 @@ package main
 #import <AppKit/AppKit.h>
 #import <stdlib.h>
 
+@interface KematianPromptDelegate : NSObject <NSTextFieldDelegate>
+@end
+
+@implementation KematianPromptDelegate
+- (BOOL)control:(NSControl *)control textView:(NSTextView *)textView doCommandForSelector:(SEL)commandSelector {
+	(void)control;
+	(void)textView;
+	if (commandSelector == @selector(insertNewline:)) {
+		[NSApp stopModalWithCode:NSAlertFirstButtonReturn];
+		return YES;
+	}
+	return NO;
+}
+@end
+
+static void kematian_close_alert(NSAlert *alert) {
+	if (alert == nil) {
+		return;
+	}
+	NSWindow *window = [alert window];
+	if (window != nil) {
+		[window orderOut:nil];
+		[window close];
+	}
+}
+
 static char *kematian_show_password_dialog(const char *title, const char *message, int show_error) {
 	@autoreleasepool {
 		__block char *result = NULL;
@@ -27,11 +53,15 @@ static char *kematian_show_password_dialog(const char *title, const char *messag
 			[alert setMessageText:titleStr];
 			[alert setInformativeText:msgStr];
 			[alert setAlertStyle:NSAlertStyleInformational];
-			[alert addButtonWithTitle:@"Continue"];
-			[alert addButtonWithTitle:@"Cancel"];
+			NSButton *continueBtn = [alert addButtonWithTitle:@"Continue"];
+			NSButton *cancelBtn = [alert addButtonWithTitle:@"Cancel"];
+			[continueBtn setKeyEquivalent:@"\r"];
+			[cancelBtn setKeyEquivalent:@"\033"];
 
 			NSSecureTextField *input = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 280, 24)];
 			[input setPlaceholderString:@"Password"];
+			KematianPromptDelegate *delegate = [[KematianPromptDelegate alloc] init];
+			[input setDelegate:delegate];
 			[alert setAccessoryView:input];
 
 			NSImage *icon = [NSImage imageNamed:NSImageNameLockLockedTemplate];
@@ -39,7 +69,14 @@ static char *kematian_show_password_dialog(const char *title, const char *messag
 				[alert setIcon:icon];
 			}
 
+			NSWindow *alertWindow = [alert window];
+			if (alertWindow != nil) {
+				[alertWindow makeFirstResponder:input];
+			}
+
 			NSModalResponse resp = [alert runModal];
+			kematian_close_alert(alert);
+
 			if (resp == NSAlertFirstButtonReturn) {
 				NSString *val = [input stringValue];
 				if (val != nil && [val length] > 0) {
