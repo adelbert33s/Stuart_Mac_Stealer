@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -137,20 +136,16 @@ func getKeychainPassword(browserName string) (string, error) {
 }
 
 func runSecurityPasswordLookup(args []string) (string, error) {
-	cmd := exec.Command("security", args...)
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return "", fmt.Errorf("%w: %s", err, msg)
+	return RunSecurityStdout(args...)
+}
+
+func securityArgsContain(args []string, value string) bool {
+	for _, a := range args {
+		if a == value {
+			return true
 		}
-		return "", err
 	}
-	if strings.Contains(stderr.String(), "could not be found") {
-		return "", fmt.Errorf("could not be found")
-	}
-	return strings.TrimSpace(stdout.String()), nil
+	return false
 }
 
 func deriveChromeV10Key(password string) []byte {

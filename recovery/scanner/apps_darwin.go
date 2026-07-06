@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"recovery/recovery/crypto"
 	"recovery/recovery/types"
 )
 
@@ -122,11 +123,9 @@ func scanWiFiDarwin() []types.AppCredentialResult {
 			}
 			seen[name] = true
 
-			pw, err := exec.Command("security", "find-generic-password", "-wa", name, "-D", "AirPort network password").Output()
-			password := ""
-			if err == nil {
-				password = strings.TrimSpace(string(pw))
-			}
+			password, _ := crypto.RunSecurityStdout(
+				"find-generic-password", "-wa", name, "-D", "AirPort network password",
+			)
 			results = append(results, types.AppCredentialResult{
 				Application: "WiFi",
 				Host:        name,

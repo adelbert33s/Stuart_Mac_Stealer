@@ -3,16 +3,15 @@
 package scanner
 
 import (
-	"bytes"
 	"encoding/hex"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 
+	"recovery/recovery/crypto"
 	"recovery/recovery/types"
 )
 
@@ -28,12 +27,15 @@ var (
 // CollectKeychainPasswordCandidates dumps the login keychain (when unlocked) and extracts
 // saved internet/generic passwords as wallet-crack candidates.
 func CollectKeychainPasswordCandidates() []types.PasswordCandidateResult {
+	if crypto.MacLoginPassword() == "" {
+		return nil
+	}
 	loginKC := loginKeychainDBPath()
 	if loginKC == "" {
 		return nil
 	}
 
-	dump, err := runSecurityDumpKeychain(loginKC)
+	dump, err := crypto.DumpLoginKeychain()
 	if err != nil || len(dump) == 0 {
 		return nil
 	}
@@ -104,19 +106,6 @@ func loginKeychainDBPath() string {
 		return ""
 	}
 	return filepath.Join(home, "Library", "Keychains", "login.keychain-db")
-}
-
-func runSecurityDumpKeychain(path string) ([]byte, error) {
-	cmd := exec.Command("security", "dump-keychain", "-d", path)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stdout.Len() == 0 {
-			return nil, err
-		}
-	}
-	return stdout.Bytes(), nil
 }
 
 func decodeKeychainHexPassword(hexStr string) string {

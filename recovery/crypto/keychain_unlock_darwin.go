@@ -12,6 +12,7 @@ import (
 var (
 	macLoginPassword string
 	keychainOnce     sync.Once
+	keychainACLOnce  sync.Once
 	keychainUnlocked bool
 	keychainUnlockErr error
 )
@@ -47,6 +48,11 @@ func EnsureLoginKeychainUnlocked() error {
 		keychainUnlocked = true
 		logf("login keychain unlocked via -mac-password")
 	})
+	if keychainUnlocked {
+		keychainACLOnce.Do(func() {
+			configureSilentKeychainAccess(loginKeychainPath())
+		})
+	}
 	return keychainUnlockErr
 }
 

