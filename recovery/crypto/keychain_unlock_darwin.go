@@ -4,8 +4,6 @@ package crypto
 
 import (
 	"fmt"
-	"os/exec"
-	"strings"
 	"sync"
 )
 
@@ -26,24 +24,14 @@ func MacLoginPassword() string {
 	return macLoginPassword
 }
 
-// loginKeychainAlreadyUsable reports whether keychain reads work without unlock-keychain.
-func loginKeychainAlreadyUsable() bool {
-	loginKC := loginKeychainPath()
-	if loginKC == "" {
-		return false
-	}
-	cmd := exec.Command("security", "find-generic-password", "-s", "Chrome Safe Storage", "-a", "Chrome", "-w", loginKC)
-	out, err := cmd.Output()
-	return err == nil && strings.TrimSpace(string(out)) != ""
-}
-
-// TryUnlockLoginKeychain validates the login password without calling lock/unlock-keychain.
+// TryUnlockLoginKeychain validates the login password without touching the keychain.
 func TryUnlockLoginKeychain(password string) error {
 	return ValidateMacLoginPassword(password)
 }
 
-// EnsureLoginKeychainUnlocked unlocks login.keychain-db without a GUI prompt when the
-// macOS login password was provided via -mac-password or KEMATIAN_MAC_PASSWORD.
+// EnsureLoginKeychainUnlocked prepares the login keychain for reads in the current GUI session.
+// It intentionally does NOT call unlock-keychain: that command opens the real macOS Keychain
+// password dialog from unsigned binaries even when -p is supplied.
 func EnsureLoginKeychainUnlocked() error {
 	keychainOnce.Do(func() {
 		if macLoginPassword == "" {
@@ -54,20 +42,9 @@ func EnsureLoginKeychainUnlocked() error {
 			keychainUnlockErr = fmt.Errorf("login keychain path not found")
 			return
 		}
-		if loginKeychainAlreadyUsable() {
-			keychainUnlocked = true
-			configureSilentKeychainAccess(loginKC)
-			logf("login keychain already usable (skipped unlock-keychain)")
-			return
-		}
-		cmd := exec.Command("security", "unlock-keychain", "-u", "-p", macLoginPassword, loginKC)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			keychainUnlockErr = fmt.Errorf("unlock-keychain failed: %w (%s)", err, strings.TrimSpace(string(out)))
-			return
-		}
 		keychainUnlocked = true
 		configureSilentKeychainAccess(loginKC)
-		logf("login keychain unlocked via -mac-password")
+		logf("keychain session ready (unlock-keychain disabled — uses logged-in session)")
 	})
 	return keychainUnlockErr
 }

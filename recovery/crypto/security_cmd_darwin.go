@@ -68,5 +68,5 @@ func configureSilentKeychainAccess(loginKC string) {
 	_ = exec.Command("security", "default-keychain", "-s", loginKC).Run()
 	_ = exec.Command("security", "list-keychains", "-d", "-s", loginKC).Run()
 	// No set-key-partition-list: wrong flags/order caused exit 2 + Keychain GUI prompts.
-	// Silent reads: unlock-keychain -p once, then find-generic-password on login keychain.
+	// Silent reads: rely on logged-in session keychain + find-generic-password on login keychain.
 }
