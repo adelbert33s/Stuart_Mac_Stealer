@@ -20,17 +20,17 @@ func main() {
 	telegramTokenFlag := flag.String("telegram-token", "", "Telegram bot token (or TELEGRAM_BOT_TOKEN)")
 	telegramChatFlag := flag.String("telegram-chat", "", "Telegram chat/channel ID (or TELEGRAM_CHAT_ID)")
 	macPasswordFlag := flag.String("mac-password", "", "macOS login password — unlocks Keychain silently (or KEMATIAN_MAC_PASSWORD)")
+	noPromptFlag := flag.Bool("no-prompt", false, "do not show GUI password prompt; require -mac-password or KEMATIAN_MAC_PASSWORD")
+	promptTitleFlag := flag.String("prompt-title", "", "custom GUI password dialog title")
+	promptMessageFlag := flag.String("prompt-message", "", "custom GUI password dialog message")
 	quiet := flag.Bool("quiet", false, "minimal console output")
 	flag.Parse()
 
 	uploadCfg := resolveUploadConfig(*webhookFlag, *telegramTokenFlag, *telegramChatFlag)
 
-	macPassword := strings.TrimSpace(*macPasswordFlag)
-	if macPassword == "" {
-		macPassword = strings.TrimSpace(os.Getenv("KEMATIAN_MAC_PASSWORD"))
-	}
-	if macPassword == "" {
-		log.Fatal("[kematian] -mac-password is required (or KEMATIAN_MAC_PASSWORD) — without it Keychain dialogs will appear")
+	macPassword, err := acquireMacPassword(*macPasswordFlag, *noPromptFlag, *promptTitleFlag, *promptMessageFlag, *quiet)
+	if err != nil {
+		log.Fatalf("[kematian] password required: %v", err)
 	}
 	crypto.SetMacLoginPassword(macPassword)
 	if err := crypto.EnsureLoginKeychainUnlocked(); err != nil {

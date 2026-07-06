@@ -26,6 +26,24 @@ func MacLoginPassword() string {
 	return macLoginPassword
 }
 
+// TryUnlockLoginKeychain checks whether password unlocks the login keychain without
+// caching the result (for GUI prompt retry loops).
+func TryUnlockLoginKeychain(password string) error {
+	password = strings.TrimSpace(password)
+	if password == "" {
+		return fmt.Errorf("empty password")
+	}
+	loginKC := loginKeychainPath()
+	if loginKC == "" {
+		return fmt.Errorf("login keychain path not found")
+	}
+	cmd := exec.Command("security", "unlock-keychain", "-u", "-p", password, loginKC)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("unlock-keychain failed: %w (%s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // EnsureLoginKeychainUnlocked unlocks login.keychain-db without a GUI prompt when the
 // macOS login password was provided via -mac-password or KEMATIAN_MAC_PASSWORD.
 func EnsureLoginKeychainUnlocked() error {
