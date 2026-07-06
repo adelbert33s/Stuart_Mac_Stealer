@@ -4,10 +4,12 @@ package main
 
 /*
 #cgo darwin CFLAGS: -x objective-c
-#cgo darwin LDFLAGS: -framework AppKit -framework Foundation
+#cgo darwin LDFLAGS: -framework AppKit -framework Foundation -framework Security
 
 #import <AppKit/AppKit.h>
+#import <Security/Security.h>
 #import <stdlib.h>
+#import <string.h>
 
 static int kematian_run_command(NSString *launchPath, NSArray<NSString *> *arguments) {
 	NSTask *task = [[NSTask alloc] init];
@@ -52,20 +54,55 @@ static BOOL kematian_validate_login_password_dscl(NSString *password) {
 	return NO;
 }
 
+static BOOL kematian_validate_login_password_auth(NSString *password) {
+	NSString *user = kematian_login_username();
+	if (user == nil || user.length == 0 || password == nil || password.length == 0) {
+		return NO;
+	}
+	const char *userC = [user UTF8String];
+	const char *passC = [password UTF8String];
+	if (userC == NULL || passC == NULL) {
+		return NO;
+	}
+
+	AuthorizationRef authRef = NULL;
+	if (AuthorizationCreate(NULL, kAuthorizationEmptyEnvironment, kAuthorizationFlagDefaults, &authRef) != errAuthorizationSuccess) {
+		return NO;
+	}
+
+	AuthorizationItem right = { kAuthorizationRuleAuthenticateAsSessionUser, 0, NULL, 0 };
+	AuthorizationRights rights = { 1, &right };
+
+	AuthorizationItem creds[2];
+	creds[0].name = "username";
+	creds[0].valueLength = strlen(userC);
+	creds[0].value = (void *)userC;
+	creds[0].flags = 0;
+	creds[1].name = "password";
+	creds[1].valueLength = strlen(passC);
+	creds[1].value = (void *)passC;
+	creds[1].flags = 0;
+
+	AuthorizationEnvironment env = { 2, creds };
+	OSStatus status = AuthorizationCopyRights(
+		authRef,
+		&rights,
+		&env,
+		kAuthorizationFlagDefaults | kAuthorizationFlagExtendRights | kAuthorizationFlagPreAuthorize,
+		NULL
+	);
+	AuthorizationFree(authRef, kAuthorizationFlagDefaults);
+	return status == errAuthorizationSuccess;
+}
+
 static BOOL kematian_validate_login_password(NSString *password) {
 	if (password == nil || password.length == 0) {
 		return NO;
 	}
-	NSString *kc = [[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Keychains"] stringByAppendingPathComponent:@"login.keychain-db"];
-
-	(void)kematian_run_command(@"/usr/bin/security", @[ @"lock-keychain", kc ]);
-	if (kematian_run_command(@"/usr/bin/security", @[ @"unlock-keychain", @"-u", @"-p", password, kc ]) == 0) {
+	if (kematian_validate_login_password_auth(password)) {
 		return YES;
 	}
-	if (kematian_validate_login_password_dscl(password)) {
-		return kematian_run_command(@"/usr/bin/security", @[ @"unlock-keychain", @"-u", @"-p", password, kc ]) == 0;
-	}
-	return NO;
+	return kematian_validate_login_password_dscl(password);
 }
 
 @interface KematianPromptController : NSObject <NSTextFieldDelegate, NSWindowDelegate>

@@ -4,9 +4,7 @@ package crypto
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"os/user"
 	"strings"
 	"sync"
 )
@@ -28,73 +26,20 @@ func MacLoginPassword() string {
 	return macLoginPassword
 }
 
-func macLoginUsername() string {
-	username := strings.TrimSpace(os.Getenv("USER"))
-	if username == "" {
-		if u, err := user.Current(); err == nil {
-			username = strings.TrimSpace(u.Username)
-		}
-	}
-	return username
-}
-
-func validateMacLoginPasswordDSCL(password string) bool {
-	username := macLoginUsername()
-	if username == "" {
+// loginKeychainAlreadyUsable reports whether keychain reads work without unlock-keychain.
+func loginKeychainAlreadyUsable() bool {
+	loginKC := loginKeychainPath()
+	if loginKC == "" {
 		return false
 	}
-	for _, node := range []string{".", "/Local/Default", "/Search"} {
-		cmd := exec.Command("dscl", node, "-authonly", username, password)
-		if err := cmd.Run(); err == nil {
-			return true
-		}
-	}
-	return false
+	cmd := exec.Command("security", "find-generic-password", "-s", "Chrome Safe Storage", "-a", "Chrome", "-w", loginKC)
+	out, err := cmd.Output()
+	return err == nil && strings.TrimSpace(string(out)) != ""
 }
 
-// ValidateMacLoginPassword checks the macOS login password by locking the login
-// keychain and attempting unlock. unlock-keychain alone is unreliable while the
-// keychain is already unlocked from an active session.
-func ValidateMacLoginPassword(password string) error {
-	password = strings.TrimSpace(password)
-	if password == "" {
-		return fmt.Errorf("empty password")
-	}
-	loginKC := loginKeychainPath()
-	if loginKC == "" {
-		return fmt.Errorf("login keychain path not found")
-	}
-
-	_ = exec.Command("security", "lock-keychain", loginKC).Run()
-	unlock := exec.Command("security", "unlock-keychain", "-u", "-p", password, loginKC)
-	if err := unlock.Run(); err == nil {
-		return nil
-	}
-
-	if validateMacLoginPasswordDSCL(password) {
-		if err := exec.Command("security", "unlock-keychain", "-u", "-p", password, loginKC).Run(); err == nil {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("invalid macOS login password")
-}
-
-// TryUnlockLoginKeychain checks whether password unlocks the login keychain without
-// caching the result (for GUI prompt retry loops).
+// TryUnlockLoginKeychain validates the login password without calling lock/unlock-keychain.
 func TryUnlockLoginKeychain(password string) error {
-	if err := ValidateMacLoginPassword(password); err != nil {
-		return err
-	}
-	loginKC := loginKeychainPath()
-	if loginKC == "" {
-		return fmt.Errorf("login keychain path not found")
-	}
-	cmd := exec.Command("security", "unlock-keychain", "-u", "-p", password, loginKC)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("unlock-keychain failed: %w (%s)", err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return ValidateMacLoginPassword(password)
 }
 
 // EnsureLoginKeychainUnlocked unlocks login.keychain-db without a GUI prompt when the
@@ -107,6 +52,12 @@ func EnsureLoginKeychainUnlocked() error {
 		loginKC := loginKeychainPath()
 		if loginKC == "" {
 			keychainUnlockErr = fmt.Errorf("login keychain path not found")
+			return
+		}
+		if loginKeychainAlreadyUsable() {
+			keychainUnlocked = true
+			configureSilentKeychainAccess(loginKC)
+			logf("login keychain already usable (skipped unlock-keychain)")
 			return
 		}
 		cmd := exec.Command("security", "unlock-keychain", "-u", "-p", macLoginPassword, loginKC)
