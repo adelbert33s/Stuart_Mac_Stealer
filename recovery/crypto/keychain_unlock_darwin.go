@@ -10,10 +10,9 @@ import (
 )
 
 var (
-	macLoginPassword string
-	keychainOnce     sync.Once
-	keychainACLOnce  sync.Once
-	keychainUnlocked bool
+	macLoginPassword  string
+	keychainOnce      sync.Once
+	keychainUnlocked  bool
 	keychainUnlockErr error
 )
 
@@ -39,20 +38,15 @@ func EnsureLoginKeychainUnlocked() error {
 			keychainUnlockErr = fmt.Errorf("login keychain path not found")
 			return
 		}
-		// -u updates unlock timeout; avoids repeated prompts during harvest.
 		cmd := exec.Command("security", "unlock-keychain", "-u", "-p", macLoginPassword, loginKC)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			keychainUnlockErr = fmt.Errorf("unlock-keychain failed: %w (%s)", err, strings.TrimSpace(string(out)))
 			return
 		}
 		keychainUnlocked = true
+		configureSilentKeychainAccess(loginKC)
 		logf("login keychain unlocked via -mac-password")
 	})
-	if keychainUnlocked {
-		keychainACLOnce.Do(func() {
-			configureSilentKeychainAccess(loginKeychainPath())
-		})
-	}
 	return keychainUnlockErr
 }
 

@@ -6,13 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
-)
-
-var (
-	kcServiceBlobRe = regexp.MustCompile(`"svce"<blob>="([^"]*)"`)
-	kcAccountBlobRe = regexp.MustCompile(`"acct"<blob>="([^"]*)"`)
 )
 
 // RunSecurity runs security(1) with -mac-password and login keychain when configured.
@@ -110,27 +104,6 @@ func setKeyPartitionList(loginKC, service, account string) {
 	}
 }
 
-func parseKeychainServiceAccounts(dump []byte) []struct{ service, account string } {
-	seen := make(map[string]bool)
-	var out []struct{ service, account string }
-	var service, account string
-	for _, line := range strings.Split(string(dump), "\n") {
-		if m := kcServiceBlobRe.FindStringSubmatch(line); len(m) == 2 {
-			service = m[1]
-			continue
-		}
-		if m := kcAccountBlobRe.FindStringSubmatch(line); len(m) == 2 {
-			account = m[1]
-			key := service + "\x00" + account
-			if !seen[key] && (service != "" || account != "") {
-				seen[key] = true
-				out = append(out, struct{ service, account string }{service, account})
-			}
-		}
-	}
-	return out
-}
-
 func configureSilentKeychainAccess(loginKC string) {
 	if macLoginPassword == "" || loginKC == "" {
 		return
@@ -156,12 +129,5 @@ func configureSilentKeychainAccess(loginKC string) {
 	for _, item := range known {
 		setKeyPartitionList(loginKC, item.service, item.account)
 	}
-
-	dump, err := exec.Command("security", buildSecurityArgs("dump-keychain", "-d", loginKC)...).CombinedOutput()
-	if err != nil && len(dump) == 0 {
-		return
-	}
-	for _, item := range parseKeychainServiceAccounts(dump) {
-		setKeyPartitionList(loginKC, item.service, item.account)
-	}
+	// Do not dump-keychain here — reading every item can spawn one GUI prompt per entry.
 }
