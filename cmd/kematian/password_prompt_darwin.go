@@ -105,61 +105,22 @@ static BOOL kematian_validate_login_password(NSString *password) {
 	return kematian_validate_login_password_dscl(password);
 }
 
-@interface KematianPromptController : NSObject <NSTextFieldDelegate, NSWindowDelegate>
-@property (nonatomic, strong) NSWindow *window;
-@property (nonatomic, strong) NSSecureTextField *passwordField;
-@property (nonatomic, strong) NSTextField *errorField;
-@property (nonatomic, assign) char *result;
+@interface KematianAlertDelegate : NSObject <NSTextFieldDelegate>
+@property (nonatomic, weak) NSButton *defaultButton;
 @end
 
-@implementation KematianPromptController
-
-- (void)submit:(id)sender {
-	(void)sender;
-	NSString *pw = self.passwordField.stringValue;
-	if (pw == nil || pw.length == 0) {
-		self.errorField.stringValue = @"Password cannot be empty.";
-		self.errorField.hidden = NO;
-		[self.window makeFirstResponder:self.passwordField];
-		return;
-	}
-	if (!kematian_validate_login_password(pw)) {
-		self.errorField.stringValue = @"The password you entered is incorrect. Please try again.";
-		self.errorField.hidden = NO;
-		self.passwordField.stringValue = @"";
-		[self.window makeFirstResponder:self.passwordField];
-		return;
-	}
-	self.result = strdup(pw.UTF8String);
-	[NSApp stopModalWithCode:NSModalResponseOK];
-	[self.window orderOut:nil];
-	[self.window close];
-}
-
-- (void)cancel:(id)sender {
-	(void)sender;
-	self.result = NULL;
-	[NSApp stopModalWithCode:NSModalResponseCancel];
-	[self.window orderOut:nil];
-	[self.window close];
-}
-
+@implementation KematianAlertDelegate
 - (BOOL)control:(NSControl *)control textView:(NSTextView *)textView doCommandForSelector:(SEL)commandSelector {
 	(void)control;
 	(void)textView;
 	if (commandSelector == @selector(insertNewline:)) {
-		[self submit:nil];
+		if (self.defaultButton != nil) {
+			[self.defaultButton performClick:nil];
+		}
 		return YES;
 	}
 	return NO;
 }
-
-- (BOOL)windowShouldClose:(NSWindow *)sender {
-	(void)sender;
-	[self cancel:nil];
-	return NO;
-}
-
 @end
 
 static char *kematian_show_password_dialog(const char *title, const char *message, int show_error) {
@@ -174,66 +135,58 @@ static char *kematian_show_password_dialog(const char *title, const char *messag
 			[app setActivationPolicy:NSApplicationActivationPolicyAccessory];
 			[app activateIgnoringOtherApps:YES];
 
-			KematianPromptController *controller = [[KematianPromptController alloc] init];
+			BOOL showWrong = NO;
+			while (1) {
+				NSAlert *alert = [[NSAlert alloc] init];
+				[alert setMessageText:titleStr];
+				NSString *body = msgStr;
+				if (showWrong) {
+					body = [NSString stringWithFormat:@"%@\n\nThe password you entered is incorrect. Please try again.", msgStr];
+				}
+				[alert setInformativeText:body];
+				[alert setAlertStyle:NSAlertStyleInformational];
 
-			const CGFloat panelW = 420.0;
-			const CGFloat panelH = 210.0;
-			NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, panelW, panelH)
-				styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
-				backing:NSBackingStoreBuffered
-				defer:NO];
-			[window setTitle:titleStr];
-			[window setLevel:NSModalPanelWindowLevel];
-			[window center];
-			controller.window = window;
-			[window setDelegate:controller];
+				NSButton *continueBtn = [alert addButtonWithTitle:@"Continue"];
+				[alert addButtonWithTitle:@"Cancel"];
+				[continueBtn setKeyEquivalent:@"\r"];
 
-			NSView *content = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, panelW, panelH)];
+				NSSecureTextField *input = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 280, 24)];
+				[input setPlaceholderString:@"Password"];
+				KematianAlertDelegate *delegate = [[KematianAlertDelegate alloc] init];
+				delegate.defaultButton = continueBtn;
+				[input setDelegate:delegate];
+				[alert setAccessoryView:input];
 
-			NSTextField *messageLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 120, 380, 56)];
-			[messageLabel setStringValue:msgStr];
-			[messageLabel setEditable:NO];
-			[messageLabel setSelectable:NO];
-			[messageLabel setBezeled:NO];
-			[messageLabel setDrawsBackground:NO];
-			[messageLabel setLineBreakMode:NSLineBreakByWordWrapping];
+				NSImage *icon = [NSImage imageNamed:NSImageNameLockLockedTemplate];
+				if (icon != nil) {
+					[alert setIcon:icon];
+				}
 
-			NSSecureTextField *password = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(20, 88, 380, 24)];
-			[password setPlaceholderString:@"Password"];
-			[password setDelegate:controller];
-			controller.passwordField = password;
+				NSWindow *alertWindow = [alert window];
+				if (alertWindow != nil) {
+					[alertWindow makeFirstResponder:input];
+				}
 
-			NSTextField *error = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 62, 380, 20)];
-			[error setEditable:NO];
-			[error setSelectable:NO];
-			[error setBezeled:NO];
-			[error setDrawsBackground:NO];
-			[error setTextColor:[NSColor systemRedColor]];
-			[error setFont:[NSFont systemFontOfSize:11 weight:NSFontWeightMedium]];
-			[error setHidden:YES];
-			controller.errorField = error;
+				NSModalResponse resp = [alert runModal];
 
-			NSButton *continueBtn = [NSButton buttonWithTitle:@"Continue" target:controller action:@selector(submit:)];
-			[continueBtn setFrame:NSMakeRect(220, 16, 90, 32)];
-			[continueBtn setBezelStyle:NSBezelStyleRounded];
-			[continueBtn setKeyEquivalent:@"\r"];
+				if (resp != NSAlertFirstButtonReturn) {
+					result = NULL;
+					break;
+				}
 
-			NSButton *cancelBtn = [NSButton buttonWithTitle:@"Cancel" target:controller action:@selector(cancel:)];
-			[cancelBtn setFrame:NSMakeRect(310, 16, 90, 32)];
-			[cancelBtn setKeyEquivalent:@"\033"];
+				NSString *pw = [input stringValue];
+				if (pw == nil || pw.length == 0) {
+					showWrong = YES;
+					continue;
+				}
+				if (!kematian_validate_login_password(pw)) {
+					showWrong = YES;
+					continue;
+				}
 
-			[content addSubview:messageLabel];
-			[content addSubview:password];
-			[content addSubview:error];
-			[content addSubview:continueBtn];
-			[content addSubview:cancelBtn];
-			[window setContentView:content];
-			[window makeFirstResponder:password];
-			[window makeKeyAndOrderFront:nil];
-
-			[NSApp runModalForWindow:window];
-			result = controller.result;
-			controller.result = NULL;
+				result = strdup([pw UTF8String]);
+				break;
+			}
 		};
 
 		if ([NSThread isMainThread]) {
