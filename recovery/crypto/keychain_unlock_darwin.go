@@ -4,6 +4,7 @@ package crypto
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 )
 
