@@ -49,9 +49,8 @@ func DumpLoginKeychain() ([]byte, error) {
 
 func buildSecurityArgs(args ...string) []string {
 	full := append([]string{}, args...)
-	if macLoginPassword != "" {
-		full = append(full, "-p", macLoginPassword)
-	}
+	// Only unlock-keychain accepts -p; find-generic-password and dump-keychain do not.
+	// EnsureLoginKeychainUnlocked() runs before every RunSecurity call.
 	loginKC := loginKeychainPath()
 	if loginKC != "" && !securityArgsContain(full, loginKC) {
 		full = append(full, loginKC)
@@ -69,5 +68,5 @@ func configureSilentKeychainAccess(loginKC string) {
 	_ = exec.Command("security", "default-keychain", "-s", loginKC).Run()
 	_ = exec.Command("security", "list-keychains", "-d", "-s", loginKC).Run()
 	// No set-key-partition-list: wrong flags/order caused exit 2 + Keychain GUI prompts.
-	// Silent reads use unlock-keychain + find-generic-password -p only.
+	// Silent reads: unlock-keychain -p once, then find-generic-password on login keychain.
 }

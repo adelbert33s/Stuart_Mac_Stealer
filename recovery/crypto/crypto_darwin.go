@@ -107,7 +107,7 @@ func getKeychainPassword(browserName string) (string, error) {
 			args:  []string{"find-generic-password", "-wa", account},
 		})
 	}
-	_ = loginKC // keychain path appended by RunSecurityStdout via -p
+	_ = loginKC // keychain path appended by RunSecurityStdout when not already in args
 
 	var lastErr error
 	for _, attempt := range attempts {
