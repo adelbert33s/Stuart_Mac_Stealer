@@ -1,3 +1,7 @@
+// telegram.go — Telegram Bot API client (sendDocument / sendMessage).
+//
+// Used as an alternate or parallel upload channel to Discord. Captions are
+// truncated to Telegram's limit; documents are capped slightly under 50MB.
 package main
 
 import (
@@ -11,14 +15,14 @@ import (
 	"time"
 )
 
-// Telegram Bot API allows up to 50MB per document.
+// Telegram Bot API allows up to 50MB per document; leave headroom for multipart overhead.
 const maxTelegramUpload = 45 * 1024 * 1024
 
 const (
 	telegramUploadGap       = 1200 * time.Millisecond
 	telegramUploadMaxRetry  = 5
 	telegramUploadRetryBase = 3 * time.Second
-	telegramCaptionMaxRunes = 1000
+	telegramCaptionMaxRunes = 1000 // Bot API caption limit is 1024; stay safe
 )
 
 type telegramAPIResponse struct {

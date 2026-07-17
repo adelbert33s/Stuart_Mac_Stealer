@@ -1,3 +1,8 @@
+// extensions.go — detect Chromium crypto-wallet extensions by extension ID.
+//
+// Matches installed extension folders against a generated allowlist
+// (wallet_extensions.go). Full LevelDB trees for export are collected separately
+// by CollectWalletExtensionBundles.
 package scanner
 
 import (

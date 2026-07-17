@@ -1,5 +1,7 @@
 //go:build !darwin
 
+// Non-darwin stub: the Mac password GUI and Keychain flow only exist on macOS.
+// Keeps the package compilable on other GOOS during development.
 package main
 
 import "errors"

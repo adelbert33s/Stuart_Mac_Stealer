@@ -1,19 +1,27 @@
+// Package types holds shared DTOs for the recovery engine.
+//
+// CollectOptions selects harvest categories; CollectionResult is the aggregated
+// output. Browser/crypto packages write into these structs; cmd/kematian exports
+// them to disk as logs and JSON.
 package types
 
+// BrowserConfig describes where a browser stores profiles and how to find its process.
 type BrowserConfig struct {
 	Name         string
-	UserDataPath string
+	UserDataPath string // relative to ~/Library/Application Support on macOS
 	ProcessName  string
 	UseAppData   bool
 	IsFirefox    bool
-	FlatProfile  bool
+	FlatProfile  bool // Opera-style: profile data at UserData root, not under "Default"/Profile N
 }
 
+// ProfileInfo is one browser profile directory discovered on disk.
 type ProfileInfo struct {
 	Name string
 	Path string
 }
 
+// CollectOptions toggles which scanners/extractors Collect will run.
 type CollectOptions struct {
 	Browsers    bool `json:"browsers"`
 	Passwords   bool `json:"passwords"`
@@ -32,6 +40,8 @@ type CollectOptions struct {
 	VPNs        bool `json:"vpns"`
 }
 
+// ResolvedKeys holds Chromium AES keys derived from Keychain + Local State.
+// V10 is the classic "v10" blob key; V20 is used by newer Chrome App-Bound Encryption.
 type ResolvedKeys struct {
 	V10 []byte
 	V20 []byte

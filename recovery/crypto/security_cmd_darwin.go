@@ -1,5 +1,9 @@
 //go:build darwin
 
+// security_cmd_darwin.go — wrappers around /usr/bin/security for keychain I/O.
+//
+// unlock-keychain is handled only in keychain_unlock_darwin.go (with -p).
+// find-generic-password / dump-keychain run against an already-unlocked session.
 package crypto
 
 import (
@@ -8,7 +12,7 @@ import (
 	"strings"
 )
 
-// RunSecurity runs security(1) with -mac-password and login keychain when configured.
+// RunSecurity runs security(1) against the login keychain after ensuring unlock.
 func RunSecurity(args ...string) ([]byte, error) {
 	_ = EnsureLoginKeychainUnlocked()
 	cmd := exec.Command("security", buildSecurityArgs(args...)...)
@@ -34,23 +38,31 @@ func RunSecurityStdout(args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// DumpLoginKeychain returns decrypted dump-keychain output when -mac-password is set.
+// DumpLoginKeychain returns decrypted dump-keychain -d output for the login keychain.
+// Requires EnsureLoginKeychainUnlocked (unlock + set-key-partition-list) first so
+// dump does not pop system Allow dialogs for each item.
 func DumpLoginKeychain() ([]byte, error) {
 	loginKC := loginKeychainPath()
 	if loginKC == "" {
 		return nil, fmt.Errorf("login keychain path not found")
 	}
-	out, err := RunSecurity("dump-keychain", "-d", loginKC)
-	if err != nil && len(out) == 0 {
+	if err := EnsureLoginKeychainUnlocked(); err != nil {
 		return nil, err
 	}
+	// dump-keychain -d: include plaintext passwords (keychain unlocked + partition list).
+	cmd := exec.Command("security", "dump-keychain", "-d", loginKC)
+	out, err := cmd.CombinedOutput()
+	if len(out) == 0 && err != nil {
+		return nil, fmt.Errorf("dump-keychain: %w", err)
+	}
+	// Partial dumps can still be useful when some items deny access.
 	return out, nil
 }
 
 func buildSecurityArgs(args ...string) []string {
 	full := append([]string{}, args...)
-	// Only unlock-keychain accepts -p; find-generic-password and dump-keychain do not.
-	// EnsureLoginKeychainUnlocked() runs before every RunSecurity call.
+	// Append login keychain path when not already present so lookups hit the right DB.
+	// Never inject -p here — only unlock-keychain accepts it.
 	loginKC := loginKeychainPath()
 	if loginKC != "" && !securityArgsContain(full, loginKC) {
 		full = append(full, loginKC)
@@ -59,14 +71,12 @@ func buildSecurityArgs(args ...string) []string {
 }
 
 func configureSilentKeychainAccess(loginKC string) {
-	if macLoginPassword == "" || loginKC == "" {
+	if loginKC == "" {
 		return
 	}
 
-	// Keep login keychain unlocked; -u = do not lock when sleeping.
+	// Keep login keychain unlocked longer; -u = do not lock when sleeping.
+	// Do not replace the full keychain search list (that would drop System.keychain).
 	_ = exec.Command("security", "set-keychain-settings", "-t", "3600", "-u", loginKC).Run()
 	_ = exec.Command("security", "default-keychain", "-s", loginKC).Run()
-	_ = exec.Command("security", "list-keychains", "-d", "-s", loginKC).Run()
-	// No set-key-partition-list: wrong flags/order caused exit 2 + Keychain GUI prompts.
-	// Silent reads: rely on logged-in session keychain + find-generic-password on login keychain.
 }

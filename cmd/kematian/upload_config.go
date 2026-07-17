@@ -1,3 +1,7 @@
+// upload_config.go — resolves Discord/Telegram destinations and size limits.
+//
+// Precedence for each field: CLI flag → environment variable → build-time default.
+// At least one destination must be configured (Discord webhook OR Telegram token+chat).
 package main
 
 import (
@@ -5,16 +9,20 @@ import (
 	"strings"
 )
 
-// Set at build time via -ldflags "-X main.defaultTelegramBotToken=... -X main.defaultTelegramChatID=..."
+// Build-time defaults (optional):
+//
+//	-ldflags "-X main.defaultTelegramBotToken=... -X main.defaultTelegramChatID=..."
 var defaultTelegramBotToken string
 var defaultTelegramChatID string
 
+// uploadConfig holds runtime upload destinations after flag/env/default resolution.
 type uploadConfig struct {
 	DiscordWebhook   string
 	TelegramBotToken string
 	TelegramChatID   string
 }
 
+// resolveUploadConfig merges flag, env, and ldflags values into a usable config.
 func resolveUploadConfig(webhookFlag, telegramTokenFlag, telegramChatFlag string) uploadConfig {
 	cfg := uploadConfig{
 		DiscordWebhook:   strings.TrimSpace(webhookFlag),
@@ -61,6 +69,8 @@ func (c uploadConfig) valid() bool {
 	return c.useDiscord() || c.useTelegram()
 }
 
+// maxChunkBytes is the per-zip size budget. Discord is the tighter constraint
+// when both destinations are enabled, so we always use its limit in that case.
 func (c uploadConfig) maxChunkBytes() int {
 	if c.useDiscord() {
 		return maxDiscordUpload
@@ -68,6 +78,8 @@ func (c uploadConfig) maxChunkBytes() int {
 	return maxTelegramUpload
 }
 
+// maxScannedFileBytes caps a single phase-2 file so one huge PDF cannot force
+// an entire zip over the channel limit.
 func (c uploadConfig) maxScannedFileBytes() int64 {
 	if c.useDiscord() {
 		return int64(maxScannedFileUploadSize)

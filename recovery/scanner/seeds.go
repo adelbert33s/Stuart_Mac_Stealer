@@ -1,3 +1,8 @@
+// seeds.go — heuristic BIP39 mnemonic discovery over harvest data.
+//
+// Scans small text-like files plus password/autofill values for word sequences
+// of valid BIP39 lengths. False positives are possible; results are for offline
+// review, not automatic wallet unlock.
 package scanner
 
 import (
@@ -8,7 +13,7 @@ import (
 	"recovery/recovery/types"
 )
 
-// BIP39-valid word counts
+// validSeedLengths are BIP39 mnemonic word counts we accept.
 var validSeedLengths = map[int]bool{
 	12: true, 15: true, 18: true, 21: true, 24: true,
 }

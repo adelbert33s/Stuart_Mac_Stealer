@@ -1,3 +1,8 @@
+// Package firefox extracts logins and profile data from Firefox-family browsers.
+//
+// Passwords come from logins.json + NSS (libnss3) decryption (nss_darwin.go).
+// Cookies/history/bookmarks use places.sqlite / formhistory.sqlite via recovery/db.
+// NSS calls are serialized (nssmu) because the library is not fully reentrant.
 package firefox
 
 import (
@@ -23,8 +28,10 @@ type firefoxLogin struct {
 	EncryptedPassword string `json:"encryptedPassword"`
 }
 
+// nssmu serializes PKCS#11 / NSS decrypt calls across profiles.
 var nssmu sync.Mutex
 
+// ExtractPasswords decrypts Firefox logins.json entries via NSS.
 func ExtractPasswords(profile types.ProfileInfo, cfg types.BrowserConfig, pids []uint32) []types.PasswordResult {
 	loginsPath := filepath.Join(profile.Path, "logins.json")
 	data, err := os.ReadFile(loginsPath)

@@ -1,5 +1,9 @@
 //go:build darwin
 
+// vpn_darwin.go — NordVPN, WireGuard, OpenVPN, and Mullvad config discovery.
+//
+// Looks under Application Support and ~/.config for profile files; returns nil
+// when nothing is found so the harvest JSON stays compact.
 package recovery
 
 import (
@@ -11,6 +15,7 @@ import (
 	"recovery/recovery/types"
 )
 
+// ScanVPNs aggregates VPN client configs; empty result becomes nil.
 func ScanVPNs() *types.VPNResult {
 	result := &types.VPNResult{
 		NordVPN:   scanNordVPNDarwin(),

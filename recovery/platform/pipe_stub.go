@@ -1,11 +1,18 @@
 //go:build darwin
 
+// pipe_stub.go — macOS stubs for Windows-only process-injection helpers.
+//
+// On Windows, Kematian can talk to an injected helper over a named pipe to
+// extract App-Bound Encryption (v20) keys or read locked files. macOS has no
+// equivalent path; methods return "not supported" and callers fall back to
+// Keychain-derived keys and standard file reads.
 package platform
 
 import (
 	"errors"
 )
 
+// PipeSession is a no-op on darwin (Windows injection channel placeholder).
 type PipeSession struct{}
 
 var ActivePipeSession *PipeSession

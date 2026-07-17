@@ -1,3 +1,7 @@
+// Package ziputil builds zip archives from directories or explicit path mappings.
+//
+// Used for Telegram tdata packs and other on-disk trees. Enforces maxZipSize
+// so a runaway walk cannot exhaust memory before the upload layer chunks data.
 package ziputil
 
 import (
@@ -9,6 +13,7 @@ import (
 	"path/filepath"
 )
 
+// Soft ceiling on a single in-memory zip (Telegram tdata can be large).
 const maxZipSize = 50 * 1024 * 1024 // 50 MB
 
 // FileEntry maps a disk path to a zip member path.
@@ -17,6 +22,7 @@ type FileEntry struct {
 	ZipPath  string
 }
 
+// ZipDirectory walks dir and zips every regular file under a top-level folder named after dir.
 func ZipDirectory(dir string) ([]byte, error) {
 	if _, err := os.Stat(dir); err != nil {
 		return nil, fmt.Errorf("directory not found: %s", dir)
