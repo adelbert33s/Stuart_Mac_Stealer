@@ -10,8 +10,9 @@ func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, q
 	_ = title
 	_ = message
 	_ = quiet
-	if noPrompt {
-		return "", errors.New("-mac-password is required on non-macOS builds")
+	_ = noPrompt
+	if p := fromFlag; p != "" {
+		return p, nil
 	}
-	return "", errors.New("GUI password prompt is only available on macOS")
+	return "", errors.New("GUI password prompt is only available on macOS; use -mac-password")
 }

